@@ -9,6 +9,8 @@ const server = http.createServer((req, res) => {
     filePath = './index.html';
   }
 
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url} - ${req.headers['user-agent']?.substring(0, 50) || 'Unknown'}`);
+
   const extname = String(path.extname(filePath)).toLowerCase();
   const mimeTypes = {
     '.html': 'text/html',
@@ -50,28 +52,42 @@ const wss = new WebSocket.Server({ server });
 
 const clients = new Set();
 
-wss.on('connection', (ws) => {
-  console.log('Client connected');
+wss.on('connection', (ws, req) => {
+  const clientId = Math.random().toString(36).substr(2, 9);
+  const clientIP = req.socket.remoteAddress;
+  console.log(`[${new Date().toISOString()}] Client connected - ID: ${clientId}, IP: ${clientIP}`);
+  console.log(`[${new Date().toISOString()}] Total connected clients: ${clients.size + 1}`);
+  
   clients.add(ws);
+  ws.clientId = clientId;
 
   ws.on('message', (message) => {
-    const data = JSON.parse(message);
-    console.log('Received message:', data.type);
-    
-    clients.forEach(client => {
-      if (client !== ws && client.readyState === WebSocket.OPEN) {
-        client.send(message);
-      }
-    });
+    try {
+      const data = JSON.parse(message);
+      console.log(`[${new Date().toISOString()}] Message from ${clientId}: ${data.type}`);
+      
+      let relayCount = 0;
+      clients.forEach(client => {
+        if (client !== ws && client.readyState === WebSocket.OPEN) {
+          client.send(message);
+          relayCount++;
+        }
+      });
+      
+      console.log(`[${new Date().toISOString()}] Relayed message to ${relayCount} clients`);
+    } catch (error) {
+      console.error(`[${new Date().toISOString()}] Error parsing message from ${clientId}:`, error);
+    }
   });
 
   ws.on('close', () => {
-    console.log('Client disconnected');
+    console.log(`[${new Date().toISOString()}] Client disconnected - ID: ${clientId}`);
+    console.log(`[${new Date().toISOString()}] Total connected clients: ${clients.size - 1}`);
     clients.delete(ws);
   });
 
   ws.on('error', (error) => {
-    console.error('WebSocket error:', error);
+    console.error(`[${new Date().toISOString()}] WebSocket error from ${clientId}:`, error);
     clients.delete(ws);
   });
 });
