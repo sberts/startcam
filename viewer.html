@@ -119,16 +119,12 @@
                     trickle: true
                 });
                 
-                peer.on('signal', (data) => {
-                    console.log('Sending signal:', data.type);
-                    ws.send(JSON.stringify({
-                        type: 'signal',
-                        data: data
-                    }));
-                });
                 
                 peer.on('stream', (stream) => {
-                    console.log('Received stream');
+                    console.log(`🎥 [VIEWER] Received stream with ${stream.getTracks().length} tracks`);
+                    stream.getTracks().forEach(track => {
+                        console.log(`📺 [VIEWER] Track: ${track.kind} - ${track.label}`);
+                    });
                     remoteVideo.srcObject = stream;
                     waitingMessage.style.display = 'none';
                     fullscreenBtn.disabled = false;
@@ -144,6 +140,46 @@
                     updateStatus('Connection error: ' + err.message, 'error');
                     connectBtn.disabled = false;
                 });
+                
+                // Comprehensive WebRTC debugging
+                peer._pc.oniceconnectionstatechange = () => {
+                    console.log(`🔗 [VIEWER] ICE connection state: ${peer._pc.iceConnectionState}`);
+                    updateStatus(`ICE: ${peer._pc.iceConnectionState}`, 'info');
+                };
+                
+                peer._pc.onicegatheringstatechange = () => {
+                    console.log(`📡 [VIEWER] ICE gathering state: ${peer._pc.iceGatheringState}`);
+                };
+                
+                peer._pc.onconnectionstatechange = () => {
+                    console.log(`🔌 [VIEWER] Connection state: ${peer._pc.connectionState}`);
+                };
+                
+                peer._pc.onicecandidate = (event) => {
+                    if (event.candidate) {
+                        console.log(`🧊 [VIEWER] ICE candidate:`, {
+                            type: event.candidate.type,
+                            protocol: event.candidate.protocol,
+                            address: event.candidate.address,
+                            port: event.candidate.port
+                        });
+                    } else {
+                        console.log(`✅ [VIEWER] ICE gathering complete`);
+                    }
+                };
+                
+                peer.on('signal', (data) => {
+                    console.log(`📤 [VIEWER] Sending signal:`, data.type);
+                    if (data.type === 'offer') {
+                        console.log(`📋 [VIEWER] Offer SDP:`, data.sdp?.substring(0, 100) + '...');
+                    } else if (data.type === 'answer') {
+                        console.log(`📋 [VIEWER] Answer SDP:`, data.sdp?.substring(0, 100) + '...');
+                    }
+                    ws.send(JSON.stringify({
+                        type: 'signal',
+                        data: data
+                    }));
+                });
             };
             
             ws.onmessage = async (event) => {
@@ -156,9 +192,19 @@
                     }
                     
                     const message = JSON.parse(data);
-                    console.log('Received message:', message.type);
+                    console.log(`📥 [VIEWER] Received message:`, message.type);
                     
                     if (message.type === 'signal' && peer) {
+                        if (message.data.type === 'offer') {
+                            console.log(`📋 [VIEWER] Processing offer SDP:`, message.data.sdp?.substring(0, 100) + '...');
+                        } else if (message.data.type === 'answer') {
+                            console.log(`📋 [VIEWER] Processing answer SDP:`, message.data.sdp?.substring(0, 100) + '...');
+                        } else if (message.data.candidate) {
+                            console.log(`🧊 [VIEWER] Processing ICE candidate:`, {
+                                type: message.data.candidate.split(' ')[7],
+                                address: message.data.candidate.split(' ')[4]
+                            });
+                        }
                         peer.signal(message.data);
                     }
                 } catch (error) {

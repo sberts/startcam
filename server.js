@@ -64,7 +64,20 @@ wss.on('connection', (ws, req) => {
   ws.on('message', (message) => {
     try {
       const data = JSON.parse(message);
-      console.log(`[${new Date().toISOString()}] Message from ${clientId}: ${data.type}`);
+      let logDetails = `${data.type}`;
+      
+      if (data.type === 'signal' && data.data) {
+        if (data.data.type === 'offer') {
+          logDetails += ` (offer - ${data.data.sdp ? 'with SDP' : 'no SDP'})`;
+        } else if (data.data.type === 'answer') {
+          logDetails += ` (answer - ${data.data.sdp ? 'with SDP' : 'no SDP'})`;
+        } else if (data.data.candidate) {
+          const candParts = data.data.candidate.split(' ');
+          logDetails += ` (ICE candidate: ${candParts[7] || 'unknown'} ${candParts[4] || ''})`;
+        }
+      }
+      
+      console.log(`[${new Date().toISOString()}] 📨 Message from ${clientId}: ${logDetails}`);
       
       let relayCount = 0;
       clients.forEach(client => {
@@ -74,9 +87,9 @@ wss.on('connection', (ws, req) => {
         }
       });
       
-      console.log(`[${new Date().toISOString()}] Relayed message to ${relayCount} clients`);
+      console.log(`[${new Date().toISOString()}] 🔄 Relayed to ${relayCount} clients`);
     } catch (error) {
-      console.error(`[${new Date().toISOString()}] Error parsing message from ${clientId}:`, error);
+      console.error(`[${new Date().toISOString()}] ❌ Error parsing message from ${clientId}:`, error);
     }
   });
 

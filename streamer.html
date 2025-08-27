@@ -139,7 +139,12 @@
                 });
                 
                 peer.on('signal', (data) => {
-                    console.log('Sending signal:', data.type);
+                    console.log(`📤 [STREAMER] Sending signal:`, data.type);
+                    if (data.type === 'offer') {
+                        console.log(`📋 [STREAMER] Offer SDP:`, data.sdp?.substring(0, 100) + '...');
+                    } else if (data.type === 'answer') {
+                        console.log(`📋 [STREAMER] Answer SDP:`, data.sdp?.substring(0, 100) + '...');
+                    }
                     ws.send(JSON.stringify({
                         type: 'signal',
                         data: data
@@ -155,6 +160,33 @@
                     console.error('Peer error:', err);
                     updateStatus('Connection error: ' + err.message, 'error');
                 });
+                
+                // Comprehensive WebRTC debugging
+                peer._pc.oniceconnectionstatechange = () => {
+                    console.log(`🔗 [STREAMER] ICE connection state: ${peer._pc.iceConnectionState}`);
+                    updateStatus(`ICE: ${peer._pc.iceConnectionState}`, 'info');
+                };
+                
+                peer._pc.onicegatheringstatechange = () => {
+                    console.log(`📡 [STREAMER] ICE gathering state: ${peer._pc.iceGatheringState}`);
+                };
+                
+                peer._pc.onconnectionstatechange = () => {
+                    console.log(`🔌 [STREAMER] Connection state: ${peer._pc.connectionState}`);
+                };
+                
+                peer._pc.onicecandidate = (event) => {
+                    if (event.candidate) {
+                        console.log(`🧊 [STREAMER] ICE candidate:`, {
+                            type: event.candidate.type,
+                            protocol: event.candidate.protocol,
+                            address: event.candidate.address,
+                            port: event.candidate.port
+                        });
+                    } else {
+                        console.log(`✅ [STREAMER] ICE gathering complete`);
+                    }
+                };
             };
             
             ws.onmessage = async (event) => {
@@ -167,9 +199,19 @@
                     }
                     
                     const message = JSON.parse(data);
-                    console.log('Received message:', message.type);
+                    console.log(`📥 [STREAMER] Received message:`, message.type);
                     
                     if (message.type === 'signal' && peer) {
+                        if (message.data.type === 'offer') {
+                            console.log(`📋 [STREAMER] Processing offer SDP:`, message.data.sdp?.substring(0, 100) + '...');
+                        } else if (message.data.type === 'answer') {
+                            console.log(`📋 [STREAMER] Processing answer SDP:`, message.data.sdp?.substring(0, 100) + '...');
+                        } else if (message.data.candidate) {
+                            console.log(`🧊 [STREAMER] Processing ICE candidate:`, {
+                                type: message.data.candidate.split(' ')[7],
+                                address: message.data.candidate.split(' ')[4]
+                            });
+                        }
                         peer.signal(message.data);
                     }
                 } catch (error) {
