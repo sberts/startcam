@@ -124,6 +124,16 @@
                 return;
             }
             
+            // Prevent multiple connections
+            if (peer && !peer.destroyed) {
+                console.log('🔄 [STREAMER] Destroying existing peer connection');
+                peer.destroy();
+            }
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                console.log('🔄 [STREAMER] Closing existing WebSocket');
+                ws.close();
+            }
+            
             updateStatus('Connecting to signaling server...', 'info');
             
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';

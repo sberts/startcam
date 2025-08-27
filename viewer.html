@@ -105,6 +105,16 @@
         }
         
         function connectToPeer() {
+            // Prevent multiple connections
+            if (peer && !peer.destroyed) {
+                console.log('🔄 [VIEWER] Destroying existing peer connection');
+                peer.destroy();
+            }
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                console.log('🔄 [VIEWER] Closing existing WebSocket');
+                ws.close();
+            }
+            
             updateStatus('Connecting to signaling server...', 'info');
             
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -168,7 +178,9 @@
                     updateStatus(`ICE: ${peer._pc.iceConnectionState}`, peer._pc.iceConnectionState === 'connected' ? 'connected' : 'info');
                     
                     if (peer._pc.iceConnectionState === 'failed') {
-                        console.error(`❌ [VIEWER] ICE connection failed - retrying`);
+                        console.error(`❌ [VIEWER] ICE connection failed`);
+                    } else if (peer._pc.iceConnectionState === 'disconnected') {
+                        console.warn(`⚠️ [VIEWER] ICE connection disconnected`);
                     }
                 };
                 
