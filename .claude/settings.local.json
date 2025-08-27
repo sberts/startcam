@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(del \"C:\\Users\\Squirrel\\projects\\startcam\\test-simple.html\")"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

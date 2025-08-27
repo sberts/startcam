@@ -72,20 +72,36 @@ wss.on('connection', (ws, req) => {
         } else if (data.data.type === 'answer') {
           logDetails += ` (answer - ${data.data.sdp ? 'with SDP' : 'no SDP'})`;
         } else if (data.data.candidate) {
-          const candParts = data.data.candidate.split(' ');
-          logDetails += ` (ICE candidate: ${candParts[7] || 'unknown'} ${candParts[4] || ''})`;
+          if (typeof data.data.candidate === 'string') {
+            const candParts = data.data.candidate.split(' ');
+            logDetails += ` (ICE candidate: ${candParts[7] || 'unknown'} ${candParts[4] || ''})`;
+          } else {
+            logDetails += ` (ICE candidate: ${data.data.candidate.candidate || 'object'})`;
+          }
         }
       }
       
       console.log(`[${new Date().toISOString()}] 📨 Message from ${clientId}: ${logDetails}`);
       
+      // Only allow maximum of 2 connected clients (1 streamer + 1 viewer)
+      if (clients.size > 2) {
+        console.warn(`[${new Date().toISOString()}] ⚠️ Too many clients (${clients.size}), message may cause issues`);
+      }
+      
       let relayCount = 0;
-      clients.forEach(client => {
-        if (client !== ws && client.readyState === WebSocket.OPEN) {
-          client.send(message);
-          relayCount++;
+      const targetClients = Array.from(clients).filter(client => 
+        client !== ws && client.readyState === WebSocket.OPEN
+      );
+      
+      // Only relay to the first available client to prevent duplicates
+      if (targetClients.length > 0) {
+        targetClients[0].send(message);
+        relayCount = 1;
+        
+        if (targetClients.length > 1) {
+          console.warn(`[${new Date().toISOString()}] ⚠️ Multiple target clients, only relaying to first one`);
         }
-      });
+      }
       
       console.log(`[${new Date().toISOString()}] 🔄 Relayed to ${relayCount} clients`);
     } catch (error) {

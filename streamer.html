@@ -147,7 +147,9 @@
                     trickle: true,
                     stream: localStream,
                     config: {
-                        iceServers: [],
+                        iceServers: [
+                            { urls: 'stun:stun.l.google.com:19302' }
+                        ],
                         iceTransportPolicy: 'all',
                         iceCandidatePoolSize: 10
                     }
@@ -222,10 +224,16 @@
                         } else if (message.data.type === 'answer') {
                             console.log(`📋 [STREAMER] Processing answer SDP:`, message.data.sdp?.substring(0, 100) + '...');
                         } else if (message.data.candidate) {
-                            console.log(`🧊 [STREAMER] Processing ICE candidate:`, {
-                                type: message.data.candidate.split(' ')[7],
-                                address: message.data.candidate.split(' ')[4]
-                            });
+                            const candidate = message.data.candidate;
+                            if (typeof candidate === 'string') {
+                                const parts = candidate.split(' ');
+                                console.log(`🧊 [STREAMER] Processing ICE candidate:`, {
+                                    type: parts[7] || 'unknown',
+                                    address: parts[4] || 'unknown'
+                                });
+                            } else {
+                                console.log(`🧊 [STREAMER] Processing ICE candidate object:`, candidate.candidate || 'no candidate field');
+                            }
                         }
                         peer.signal(message.data);
                     }

@@ -84,7 +84,7 @@
     </div>
     
     <div>
-        <button id="connectBtn" onclick="connectToPeer()">Connect to Streamer</button>
+        <button id="connectBtn" onclick="connect()">Connect to Streamer</button>
         <button id="fullscreenBtn" onclick="toggleFullscreen()" disabled>Fullscreen</button>
     </div>
 
@@ -102,171 +102,135 @@
         function updateStatus(message, type = 'info') {
             status.textContent = message;
             status.className = `status ${type}`;
+            console.log(`📱 [VIEWER] ${message}`);
         }
         
-        function connectToPeer() {
-            // Prevent multiple connections
-            if (peer && !peer.destroyed) {
-                console.log('🔄 [VIEWER] Destroying existing peer connection');
-                peer.destroy();
-            }
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                console.log('🔄 [VIEWER] Closing existing WebSocket');
-                ws.close();
-            }
+        function connect() {
+            updateStatus('Connecting...', 'info');
             
-            updateStatus('Connecting to signaling server...', 'info');
+            // Clean up existing connections
+            if (peer) peer.destroy();
+            if (ws) ws.close();
             
+            connectBtn.disabled = true;
+            
+            // Create WebSocket
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             ws = new WebSocket(`${protocol}//${window.location.host}`);
             
             ws.onopen = () => {
-                updateStatus('Waiting for streamer...', 'info');
-                connectBtn.disabled = true;
-                
-                peer = new SimplePeer({
-                    initiator: false,
-                    trickle: true,
-                    config: {
-                        iceServers: [],
-                        iceTransportPolicy: 'all',
-                        iceCandidatePoolSize: 10
-                    }
-                });
-                
-                
-                peer.on('stream', (stream) => {
-                    console.log(`🎥 [VIEWER] Received stream with ${stream.getTracks().length} tracks`);
-                    stream.getTracks().forEach(track => {
-                        console.log(`📺 [VIEWER] Track: ${track.kind} - enabled: ${track.enabled}, readyState: ${track.readyState}, muted: ${track.muted}`);
-                    });
-                    
-                    console.log(`🖥️ [VIEWER] Setting video srcObject`);
-                    remoteVideo.srcObject = stream;
-                    
-                    // Debug video element
-                    remoteVideo.onloadedmetadata = () => {
-                        console.log(`📐 [VIEWER] Video metadata loaded: ${remoteVideo.videoWidth}x${remoteVideo.videoHeight}`);
-                    };
-                    
-                    remoteVideo.onplay = () => {
-                        console.log(`▶️ [VIEWER] Video started playing`);
-                    };
-                    
-                    remoteVideo.onerror = (e) => {
-                        console.error(`❌ [VIEWER] Video error:`, e);
-                    };
-                    
-                    waitingMessage.style.display = 'none';
-                    fullscreenBtn.disabled = false;
-                    updateStatus('✅ Receiving video stream!', 'connected');
-                });
-                
-                peer.on('connect', () => {
-                    updateStatus('✅ Connected to streamer!', 'connected');
-                });
-                
-                peer.on('error', (err) => {
-                    console.error('Peer error:', err);
-                    updateStatus('Connection error: ' + err.message, 'error');
-                    connectBtn.disabled = false;
-                });
-                
-                // Comprehensive WebRTC debugging
-                peer._pc.oniceconnectionstatechange = () => {
-                    console.log(`🔗 [VIEWER] ICE connection state: ${peer._pc.iceConnectionState}`);
-                    updateStatus(`ICE: ${peer._pc.iceConnectionState}`, peer._pc.iceConnectionState === 'connected' ? 'connected' : 'info');
-                    
-                    if (peer._pc.iceConnectionState === 'failed') {
-                        console.error(`❌ [VIEWER] ICE connection failed`);
-                    } else if (peer._pc.iceConnectionState === 'disconnected') {
-                        console.warn(`⚠️ [VIEWER] ICE connection disconnected`);
-                    }
-                };
-                
-                peer._pc.onicegatheringstatechange = () => {
-                    console.log(`📡 [VIEWER] ICE gathering state: ${peer._pc.iceGatheringState}`);
-                };
-                
-                peer._pc.onconnectionstatechange = () => {
-                    console.log(`🔌 [VIEWER] Connection state: ${peer._pc.connectionState}`);
-                };
-                
-                peer._pc.onicecandidate = (event) => {
-                    if (event.candidate) {
-                        console.log(`🧊 [VIEWER] ICE candidate:`, {
-                            type: event.candidate.type,
-                            protocol: event.candidate.protocol,
-                            address: event.candidate.address,
-                            port: event.candidate.port,
-                            candidate: event.candidate.candidate
-                        });
-                    } else {
-                        console.log(`✅ [VIEWER] ICE gathering complete`);
-                    }
-                };
-                
-                peer.on('signal', (data) => {
-                    console.log(`📤 [VIEWER] Sending signal:`, data.type);
-                    if (data.type === 'offer') {
-                        console.log(`📋 [VIEWER] Offer SDP:`, data.sdp?.substring(0, 100) + '...');
-                    } else if (data.type === 'answer') {
-                        console.log(`📋 [VIEWER] Answer SDP:`, data.sdp?.substring(0, 100) + '...');
-                    }
-                    ws.send(JSON.stringify({
-                        type: 'signal',
-                        data: data
-                    }));
-                });
+                updateStatus('Connected to server, waiting for offer...', 'info');
             };
             
             ws.onmessage = async (event) => {
                 try {
                     let data = event.data;
-                    
-                    // Handle Blob data
                     if (data instanceof Blob) {
                         data = await data.text();
                     }
                     
                     const message = JSON.parse(data);
-                    console.log(`📥 [VIEWER] Received message:`, message.type);
+                    console.log(`📥 [VIEWER] Received:`, message.type);
                     
-                    if (message.type === 'signal' && peer) {
-                        if (message.data.type === 'offer') {
-                            console.log(`📋 [VIEWER] Processing offer SDP:`, message.data.sdp?.substring(0, 100) + '...');
-                        } else if (message.data.type === 'answer') {
-                            console.log(`📋 [VIEWER] Processing answer SDP:`, message.data.sdp?.substring(0, 100) + '...');
-                        } else if (message.data.candidate) {
-                            console.log(`🧊 [VIEWER] Processing ICE candidate:`, {
-                                type: message.data.candidate.split(' ')[7],
-                                address: message.data.candidate.split(' ')[4]
-                            });
-                        }
-                        peer.signal(message.data);
+                    if (message.type === 'signal') {
+                        handleSignal(message.data);
                     }
                 } catch (error) {
-                    console.error('Error parsing WebSocket message:', error, event.data);
+                    console.error(`❌ [VIEWER] Message error:`, error);
                 }
             };
             
             ws.onerror = (error) => {
-                console.error('WebSocket error:', error);
-                updateStatus('Signaling server error', 'error');
+                console.error(`❌ [VIEWER] WebSocket error:`, error);
+                updateStatus('Connection error', 'error');
                 connectBtn.disabled = false;
             };
             
             ws.onclose = () => {
-                updateStatus('Disconnected from signaling server', 'error');
+                updateStatus('Disconnected from server', 'error');
                 connectBtn.disabled = false;
             };
         }
         
-        function toggleFullscreen() {
+        function handleSignal(data) {
+            if (data.type === 'offer') {
+                console.log(`📋 [VIEWER] Processing offer`);
+                updateStatus('Received offer, creating answer...', 'info');
+                
+                // Create peer when we receive an offer
+                peer = new SimplePeer({
+                    initiator: false,
+                    trickle: true,
+                    config: {
+                        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+                    }
+                });
+                
+                // Set up peer event handlers
+                peer.on('signal', (signalData) => {
+                    console.log(`📤 [VIEWER] Sending:`, signalData.type);
+                    ws.send(JSON.stringify({
+                        type: 'signal',
+                        data: signalData
+                    }));
+                });
+                
+                peer.on('stream', (stream) => {
+                    console.log(`🎥 [VIEWER] Received stream!`);
+                    remoteVideo.srcObject = stream;
+                    waitingMessage.style.display = 'none';
+                    fullscreenBtn.disabled = false;
+                    updateStatus('✅ Receiving video stream!', 'connected');
+                    
+                    // Auto-enter fullscreen when video starts playing
+                    remoteVideo.onloadedmetadata = () => {
+                        console.log(`📐 [VIEWER] Video metadata loaded, entering fullscreen`);
+                        enterFullscreen();
+                    };
+                });
+                
+                peer.on('connect', () => {
+                    console.log(`🤝 [VIEWER] Peer connected!`);
+                    updateStatus('✅ Connected to streamer!', 'connected');
+                });
+                
+                peer.on('error', (err) => {
+                    console.error(`❌ [VIEWER] Peer error:`, err);
+                    updateStatus('Connection failed: ' + err.message, 'error');
+                    connectBtn.disabled = false;
+                });
+                
+                // ICE connection debugging
+                peer._pc.oniceconnectionstatechange = () => {
+                    console.log(`🔗 [VIEWER] ICE state: ${peer._pc.iceConnectionState}`);
+                    if (peer._pc.iceConnectionState === 'connected') {
+                        updateStatus('✅ Connected to streamer!', 'connected');
+                    } else if (peer._pc.iceConnectionState === 'failed') {
+                        updateStatus('Connection failed', 'error');
+                        connectBtn.disabled = false;
+                    }
+                };
+                
+                // Signal the offer to the peer
+                peer.signal(data);
+            } 
+            else if (data.candidate && peer) {
+                console.log(`🧊 [VIEWER] Processing ICE candidate`);
+                peer.signal(data);
+            }
+        }
+        
+        function enterFullscreen() {
             if (!document.fullscreenElement) {
                 remoteVideo.requestFullscreen().catch(err => {
                     console.error('Error attempting to enable fullscreen:', err);
                 });
+            }
+        }
+        
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                enterFullscreen();
             } else {
                 document.exitFullscreen();
             }
@@ -281,15 +245,9 @@
         });
         
         window.addEventListener('beforeunload', () => {
-            if (peer) {
-                peer.destroy();
-            }
-            if (ws) {
-                ws.close();
-            }
+            if (peer) peer.destroy();
+            if (ws) ws.close();
         });
-        
-        // Removed auto-connect - user must click connect button
     </script>
 </body>
 </html>
