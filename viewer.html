@@ -166,7 +166,8 @@
                             type: event.candidate.type,
                             protocol: event.candidate.protocol,
                             address: event.candidate.address,
-                            port: event.candidate.port
+                            port: event.candidate.port,
+                            candidate: event.candidate.candidate
                         });
                     } else {
                         console.log(`✅ [VIEWER] ICE gathering complete`);
