@@ -128,9 +128,25 @@
                 peer.on('stream', (stream) => {
                     console.log(`🎥 [VIEWER] Received stream with ${stream.getTracks().length} tracks`);
                     stream.getTracks().forEach(track => {
-                        console.log(`📺 [VIEWER] Track: ${track.kind} - ${track.label}`);
+                        console.log(`📺 [VIEWER] Track: ${track.kind} - enabled: ${track.enabled}, readyState: ${track.readyState}, muted: ${track.muted}`);
                     });
+                    
+                    console.log(`🖥️ [VIEWER] Setting video srcObject`);
                     remoteVideo.srcObject = stream;
+                    
+                    // Debug video element
+                    remoteVideo.onloadedmetadata = () => {
+                        console.log(`📐 [VIEWER] Video metadata loaded: ${remoteVideo.videoWidth}x${remoteVideo.videoHeight}`);
+                    };
+                    
+                    remoteVideo.onplay = () => {
+                        console.log(`▶️ [VIEWER] Video started playing`);
+                    };
+                    
+                    remoteVideo.onerror = (e) => {
+                        console.error(`❌ [VIEWER] Video error:`, e);
+                    };
+                    
                     waitingMessage.style.display = 'none';
                     fullscreenBtn.disabled = false;
                     updateStatus('✅ Receiving video stream!', 'connected');
@@ -149,7 +165,11 @@
                 // Comprehensive WebRTC debugging
                 peer._pc.oniceconnectionstatechange = () => {
                     console.log(`🔗 [VIEWER] ICE connection state: ${peer._pc.iceConnectionState}`);
-                    updateStatus(`ICE: ${peer._pc.iceConnectionState}`, 'info');
+                    updateStatus(`ICE: ${peer._pc.iceConnectionState}`, peer._pc.iceConnectionState === 'connected' ? 'connected' : 'info');
+                    
+                    if (peer._pc.iceConnectionState === 'failed') {
+                        console.error(`❌ [VIEWER] ICE connection failed - retrying`);
+                    }
                 };
                 
                 peer._pc.onicegatheringstatechange = () => {
