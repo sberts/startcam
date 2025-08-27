@@ -146,9 +146,16 @@
                 });
             };
             
-            ws.onmessage = (event) => {
+            ws.onmessage = async (event) => {
                 try {
-                    const message = JSON.parse(event.data);
+                    let data = event.data;
+                    
+                    // Handle Blob data
+                    if (data instanceof Blob) {
+                        data = await data.text();
+                    }
+                    
+                    const message = JSON.parse(data);
                     console.log('Received message:', message.type);
                     
                     if (message.type === 'signal' && peer) {
