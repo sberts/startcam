@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StartCam - WebRTC Video Streaming</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 40px 20px;
+            background: #1a1a1a;
+            color: white;
+            text-align: center;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .container {
+            max-width: 600px;
+            width: 100%;
+        }
+        
+        h1 {
+            font-size: 3em;
+            margin-bottom: 10px;
+            background: linear-gradient(45deg, #007bff, #28a745);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .subtitle {
+            font-size: 1.2em;
+            color: #ccc;
+            margin-bottom: 40px;
+        }
+        
+        .card {
+            background: #2a2a2a;
+            border-radius: 12px;
+            padding: 30px;
+            margin: 20px 0;
+            border: 2px solid #333;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            color: white;
+            display: block;
+        }
+        
+        .card:hover {
+            border-color: #007bff;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0, 123, 255, 0.2);
+        }
+        
+        .card h2 {
+            margin: 0 0 15px 0;
+            font-size: 1.5em;
+        }
+        
+        .card p {
+            margin: 0;
+            color: #bbb;
+            line-height: 1.6;
+        }
+        
+        .icon {
+            font-size: 2em;
+            margin-bottom: 15px;
+        }
+        
+        .streamer-card {
+            border-color: #007bff;
+        }
+        
+        .viewer-card {
+            border-color: #28a745;
+        }
+        
+        .info {
+            background: #2a2a2a;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 40px;
+            border-left: 4px solid #ffc107;
+        }
+        
+        .info h3 {
+            margin-top: 0;
+            color: #ffc107;
+        }
+        
+        .info ul {
+            text-align: left;
+            color: #ccc;
+            line-height: 1.8;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📹 StartCam</h1>
+        <p class="subtitle">WebRTC Video Streaming Over VPN</p>
+        
+        <a href="/streamer.html" class="card streamer-card">
+            <div class="icon">📱</div>
+            <h2>Streamer</h2>
+            <p>Start streaming video from your phone camera. Use this on the device you want to stream from.</p>
+        </a>
+        
+        <a href="/viewer.html" class="card viewer-card">
+            <div class="icon">🖥️</div>
+            <h2>Viewer</h2>
+            <p>Watch the video stream on your PC or another device. Receives video from the streamer.</p>
+        </a>
+        
+        <div class="info">
+            <h3>How to Use</h3>
+            <ul>
+                <li><strong>Step 1:</strong> Open <strong>Streamer</strong> on your phone</li>
+                <li><strong>Step 2:</strong> Open <strong>Viewer</strong> on your PC</li>
+                <li><strong>Step 3:</strong> Start camera on phone and connect</li>
+                <li><strong>Step 4:</strong> Enjoy real-time video streaming!</li>
+            </ul>
+        </div>
+    </div>
+    
+    <script>
+        // Add some interactivity to show server info
+        const serverInfo = {
+            host: window.location.host,
+            protocol: window.location.protocol
+        };
+        
+        console.log('StartCam Server:', serverInfo);
+        
+        // Optional: Add keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.key === '1') {
+                window.location.href = '/streamer.html';
+            } else if (e.key === '2') {
+                window.location.href = '/viewer.html';
+            }
+        });
+    </script>
+</body>
+</html>

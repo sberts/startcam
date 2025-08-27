@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StartCam - Streamer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #1a1a1a;
+            color: white;
+            text-align: center;
+        }
+        
+        #localVideo {
+            width: 100%;
+            max-width: 640px;
+            height: auto;
+            border: 2px solid #333;
+            border-radius: 8px;
+            background: black;
+        }
+        
+        button {
+            padding: 12px 24px;
+            margin: 10px;
+            font-size: 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            background: #007bff;
+            color: white;
+            transition: background 0.3s;
+        }
+        
+        button:hover {
+            background: #0056b3;
+        }
+        
+        button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+        
+        .status {
+            margin: 20px 0;
+            padding: 10px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+    </style>
+</head>
+<body>
+    <h1>📱 StartCam Streamer</h1>
+    <div id="status" class="status info">Ready to start streaming</div>
+    
+    <video id="localVideo" autoplay muted playsinline></video>
+    
+    <div>
+        <button id="startBtn" onclick="startStream()">Start Camera</button>
+        <button id="connectBtn" onclick="connectToPeer()" disabled>Connect to Viewer</button>
+    </div>
+
+    <script src="https://unpkg.com/simple-peer@9.11.1/simplepeer.min.js"></script>
+    <script>
+        let localStream = null;
+        let peer = null;
+        let ws = null;
+        
+        const localVideo = document.getElementById('localVideo');
+        const status = document.getElementById('status');
+        const startBtn = document.getElementById('startBtn');
+        const connectBtn = document.getElementById('connectBtn');
+        
+        function updateStatus(message, type = 'info') {
+            status.textContent = message;
+            status.className = `status ${type}`;
+        }
+        
+        async function startStream() {
+            try {
+                updateStatus('Requesting camera access...', 'info');
+                
+                localStream = await navigator.mediaDevices.getUserMedia({
+                    video: { 
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 },
+                        frameRate: { ideal: 30 }
+                    },
+                    audio: true
+                });
+                
+                localVideo.srcObject = localStream;
+                startBtn.disabled = true;
+                connectBtn.disabled = false;
+                
+                updateStatus('Camera started - Ready to connect', 'connected');
+            } catch (err) {
+                console.error('Error accessing camera:', err);
+                updateStatus('Error accessing camera: ' + err.message, 'error');
+            }
+        }
+        
+        function connectToPeer() {
+            if (!localStream) {
+                updateStatus('Start camera first', 'error');
+                return;
+            }
+            
+            updateStatus('Connecting to signaling server...', 'info');
+            
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${protocol}//${window.location.host}`);
+            
+            ws.onopen = () => {
+                updateStatus('Creating peer connection...', 'info');
+                
+                peer = new SimplePeer({
+                    initiator: true,
+                    trickle: false,
+                    stream: localStream
+                });
+                
+                peer.on('signal', (data) => {
+                    console.log('Sending signal:', data.type);
+                    ws.send(JSON.stringify({
+                        type: 'signal',
+                        data: data
+                    }));
+                });
+                
+                peer.on('connect', () => {
+                    updateStatus('✅ Connected to viewer!', 'connected');
+                    connectBtn.disabled = true;
+                });
+                
+                peer.on('error', (err) => {
+                    console.error('Peer error:', err);
+                    updateStatus('Connection error: ' + err.message, 'error');
+                });
+            };
+            
+            ws.onmessage = (event) => {
+                const message = JSON.parse(event.data);
+                console.log('Received message:', message.type);
+                
+                if (message.type === 'signal' && peer) {
+                    peer.signal(message.data);
+                }
+            };
+            
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                updateStatus('Signaling server error', 'error');
+            };
+            
+            ws.onclose = () => {
+                updateStatus('Disconnected from signaling server', 'error');
+            };
+        }
+        
+        window.addEventListener('beforeunload', () => {
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+            }
+            if (peer) {
+                peer.destroy();
+            }
+            if (ws) {
+                ws.close();
+            }
+        });
+    </script>
+</body>
+</html>

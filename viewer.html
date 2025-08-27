@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StartCam - Viewer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #1a1a1a;
+            color: white;
+            text-align: center;
+        }
+        
+        #remoteVideo {
+            width: 100%;
+            max-width: 1024px;
+            height: auto;
+            border: 2px solid #333;
+            border-radius: 8px;
+            background: black;
+        }
+        
+        button {
+            padding: 12px 24px;
+            margin: 10px;
+            font-size: 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            background: #28a745;
+            color: white;
+            transition: background 0.3s;
+        }
+        
+        button:hover {
+            background: #218838;
+        }
+        
+        button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+        
+        .status {
+            margin: 20px 0;
+            padding: 10px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        
+        .waiting {
+            margin: 40px 0;
+            font-size: 18px;
+            color: #ccc;
+        }
+    </style>
+</head>
+<body>
+    <h1>🖥️ StartCam Viewer</h1>
+    <div id="status" class="status info">Ready to receive stream</div>
+    
+    <video id="remoteVideo" autoplay playsinline controls></video>
+    
+    <div class="waiting" id="waitingMessage">
+        Waiting for streamer to connect...
+    </div>
+    
+    <div>
+        <button id="connectBtn" onclick="connectToPeer()">Connect to Streamer</button>
+        <button id="fullscreenBtn" onclick="toggleFullscreen()" disabled>Fullscreen</button>
+    </div>
+
+    <script src="https://unpkg.com/simple-peer@9.11.1/simplepeer.min.js"></script>
+    <script>
+        let peer = null;
+        let ws = null;
+        
+        const remoteVideo = document.getElementById('remoteVideo');
+        const status = document.getElementById('status');
+        const connectBtn = document.getElementById('connectBtn');
+        const fullscreenBtn = document.getElementById('fullscreenBtn');
+        const waitingMessage = document.getElementById('waitingMessage');
+        
+        function updateStatus(message, type = 'info') {
+            status.textContent = message;
+            status.className = `status ${type}`;
+        }
+        
+        function connectToPeer() {
+            updateStatus('Connecting to signaling server...', 'info');
+            
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${protocol}//${window.location.host}`);
+            
+            ws.onopen = () => {
+                updateStatus('Waiting for streamer...', 'info');
+                connectBtn.disabled = true;
+                
+                peer = new SimplePeer({
+                    initiator: false,
+                    trickle: false
+                });
+                
+                peer.on('signal', (data) => {
+                    console.log('Sending signal:', data.type);
+                    ws.send(JSON.stringify({
+                        type: 'signal',
+                        data: data
+                    }));
+                });
+                
+                peer.on('stream', (stream) => {
+                    console.log('Received stream');
+                    remoteVideo.srcObject = stream;
+                    waitingMessage.style.display = 'none';
+                    fullscreenBtn.disabled = false;
+                    updateStatus('✅ Receiving video stream!', 'connected');
+                });
+                
+                peer.on('connect', () => {
+                    updateStatus('✅ Connected to streamer!', 'connected');
+                });
+                
+                peer.on('error', (err) => {
+                    console.error('Peer error:', err);
+                    updateStatus('Connection error: ' + err.message, 'error');
+                    connectBtn.disabled = false;
+                });
+            };
+            
+            ws.onmessage = (event) => {
+                const message = JSON.parse(event.data);
+                console.log('Received message:', message.type);
+                
+                if (message.type === 'signal' && peer) {
+                    peer.signal(message.data);
+                }
+            };
+            
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                updateStatus('Signaling server error', 'error');
+                connectBtn.disabled = false;
+            };
+            
+            ws.onclose = () => {
+                updateStatus('Disconnected from signaling server', 'error');
+                connectBtn.disabled = false;
+            };
+        }
+        
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                remoteVideo.requestFullscreen().catch(err => {
+                    console.error('Error attempting to enable fullscreen:', err);
+                });
+            } else {
+                document.exitFullscreen();
+            }
+        }
+        
+        document.addEventListener('fullscreenchange', () => {
+            if (document.fullscreenElement) {
+                fullscreenBtn.textContent = 'Exit Fullscreen';
+            } else {
+                fullscreenBtn.textContent = 'Fullscreen';
+            }
+        });
+        
+        window.addEventListener('beforeunload', () => {
+            if (peer) {
+                peer.destroy();
+            }
+            if (ws) {
+                ws.close();
+            }
+        });
+        
+        // Auto-connect when page loads
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                connectToPeer();
+            }, 1000);
+        });
+    </script>
+</body>
+</html>
