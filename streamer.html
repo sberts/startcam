@@ -135,7 +135,12 @@
                 peer = new SimplePeer({
                     initiator: true,
                     trickle: true,
-                    stream: localStream
+                    stream: localStream,
+                    config: {
+                        iceServers: [],
+                        iceTransportPolicy: 'all',
+                        iceCandidatePoolSize: 10
+                    }
                 });
                 
                 peer.on('signal', (data) => {

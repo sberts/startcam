@@ -116,7 +116,12 @@
                 
                 peer = new SimplePeer({
                     initiator: false,
-                    trickle: true
+                    trickle: true,
+                    config: {
+                        iceServers: [],
+                        iceTransportPolicy: 'all',
+                        iceCandidatePoolSize: 10
+                    }
                 });
                 
                 
