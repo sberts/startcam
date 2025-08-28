@@ -151,7 +151,9 @@
                             { urls: 'stun:stun.l.google.com:19302' }
                         ],
                         iceTransportPolicy: 'all',
-                        iceCandidatePoolSize: 10
+                        iceCandidatePoolSize: 10,
+                        rtcpMuxPolicy: 'require',
+                        bundlePolicy: 'max-bundle'
                     }
                 });
                 
@@ -198,7 +200,10 @@
                             type: event.candidate.type,
                             protocol: event.candidate.protocol,
                             address: event.candidate.address,
-                            port: event.candidate.port
+                            port: event.candidate.port,
+                            priority: event.candidate.priority,
+                            foundation: event.candidate.foundation,
+                            full: event.candidate.candidate
                         });
                     } else {
                         console.log(`✅ [STREAMER] ICE gathering complete`);
