@@ -74,7 +74,7 @@ wss.on('connection', (ws, req) => {
         } else if (data.data.candidate) {
           if (typeof data.data.candidate === 'string') {
             const candParts = data.data.candidate.split(' ');
-            logDetails += ` (ICE candidate: ${candParts[7] || 'unknown'} ${candParts[4] || ''})`;
+            logDetails += ` (ICE candidate: ${candParts[4] || 'unknown'} ${candParts[7] || ''})`;
           } else {
             logDetails += ` (ICE candidate: ${data.data.candidate.candidate || 'object'})`;
           }
