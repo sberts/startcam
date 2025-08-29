@@ -160,9 +160,11 @@
                 // Create peer when we receive an offer
                 peer = new SimplePeer({
                     initiator: false,
-                    trickle: true,
+                    trickle: true, // Re-enable trickle ICE
                     config: {
-                        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+                        // For localhost testing, disable STUN to force local connection
+                        iceServers: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 
+                            [] : [{ urls: 'stun:stun.l.google.com:19302' }],
                         iceTransportPolicy: 'all',
                         iceCandidatePoolSize: 10,
                         rtcpMuxPolicy: 'require',
@@ -180,22 +182,140 @@
                 });
                 
                 peer.on('stream', (stream) => {
-                    console.log(`🎥 [VIEWER] Received stream!`);
+                    console.log(`🎥 [VIEWER] Received stream!`, stream);
+                    console.log(`🎥 [VIEWER] Stream details:`, {
+                        id: stream.id,
+                        videoTracks: stream.getVideoTracks().length,
+                        audioTracks: stream.getAudioTracks().length,
+                        active: stream.active
+                    });
+                    
+                    stream.getTracks().forEach((track, index) => {
+                        console.log(`📊 [VIEWER] Remote track ${index}:`, {
+                            kind: track.kind,
+                            enabled: track.enabled,
+                            readyState: track.readyState,
+                            label: track.label,
+                            muted: track.muted
+                        });
+                    });
+                    
                     remoteVideo.srcObject = stream;
+                    console.log(`🎥 [VIEWER] Set remote video srcObject`);
+                    
+                    // Force unmute the video element (browser autoplay policy workaround)
+                    remoteVideo.muted = false;
+                    console.log('🔊 [VIEWER] Unmuted video element');
+                    
+                    // Enhanced video event logging
+                    remoteVideo.onloadstart = () => {
+                        console.log('🎥 [VIEWER] Video load started');
+                        console.log('🔍 [VIEWER] Video state after loadstart:', {
+                            readyState: remoteVideo.readyState,
+                            networkState: remoteVideo.networkState,
+                            paused: remoteVideo.paused,
+                            ended: remoteVideo.ended,
+                            currentTime: remoteVideo.currentTime,
+                            duration: remoteVideo.duration
+                        });
+                    };
+                    remoteVideo.onloadeddata = () => {
+                        console.log('🎥 [VIEWER] Video data loaded');
+                        console.log('🔍 [VIEWER] Video state after data loaded:', {
+                            readyState: remoteVideo.readyState,
+                            videoWidth: remoteVideo.videoWidth,
+                            videoHeight: remoteVideo.videoHeight
+                        });
+                    };
+                    remoteVideo.oncanplay = () => {
+                        console.log('🎥 [VIEWER] Video can play');
+                        // Force immediate play attempt when canplay fires
+                        console.log('🎬 [VIEWER] Attempting immediate play from canplay event...');
+                        remoteVideo.play().then(() => {
+                            console.log('✅ [VIEWER] Immediate play succeeded!');
+                        }).catch(err => {
+                            console.error('❌ [VIEWER] Immediate play failed:', err);
+                        });
+                    };
+                    remoteVideo.onplay = () => console.log('🎥 [VIEWER] Video started playing');
+                    remoteVideo.onpause = () => console.log('🎥 [VIEWER] Video paused');
+                    remoteVideo.onerror = (e) => console.error('❌ [VIEWER] Video error:', e);
+                    remoteVideo.onstalled = () => console.log('⏸️ [VIEWER] Video stalled');
+                    remoteVideo.onwaiting = () => console.log('⏳ [VIEWER] Video waiting for data');
+                    remoteVideo.onsuspend = () => console.log('⏹️ [VIEWER] Video suspended');
+                    remoteVideo.onemptied = () => console.log('🗑️ [VIEWER] Video emptied');
+                    remoteVideo.onabort = () => console.log('🛑 [VIEWER] Video aborted');
+                    
                     waitingMessage.style.display = 'none';
                     fullscreenBtn.disabled = false;
                     updateStatus('✅ Receiving video stream!', 'connected');
                     
                     // Auto-enter fullscreen when video starts playing
                     remoteVideo.onloadedmetadata = () => {
-                        console.log(`📐 [VIEWER] Video metadata loaded, entering fullscreen`);
-                        enterFullscreen();
+                        console.log(`📐 [VIEWER] Video metadata loaded:`, {
+                            videoWidth: remoteVideo.videoWidth,
+                            videoHeight: remoteVideo.videoHeight,
+                            duration: remoteVideo.duration,
+                            paused: remoteVideo.paused,
+                            muted: remoteVideo.muted
+                        });
+                        
+                        // Try multiple approaches to get video playing
+                        // Debug current video state before attempting play
+                        console.log('📊 [VIEWER] Video state before play attempt:', {
+                            readyState: remoteVideo.readyState,
+                            networkState: remoteVideo.networkState,
+                            videoWidth: remoteVideo.videoWidth,
+                            videoHeight: remoteVideo.videoHeight,
+                            duration: remoteVideo.duration,
+                            paused: remoteVideo.paused,
+                            currentTime: remoteVideo.currentTime,
+                            srcObject: !!remoteVideo.srcObject,
+                            streamActive: stream.active,
+                            streamTracks: stream.getTracks().length
+                        });
+                        
+                        setTimeout(() => {
+                            console.log('🎬 [VIEWER] Attempting to play video...');
+                            
+                            // First try muted
+                            remoteVideo.muted = true;
+                            remoteVideo.play().then(() => {
+                                console.log('✅ [VIEWER] Video play() succeeded (muted)');
+                                
+                                // Then try to unmute after a short delay
+                                setTimeout(() => {
+                                    remoteVideo.muted = false;
+                                    console.log('🔊 [VIEWER] Attempted to unmute after play');
+                                }, 500);
+                                
+                                enterFullscreen();
+                            }).catch(err => {
+                                console.error('❌ [VIEWER] Video play() failed:', err);
+                                
+                                // Try forcing without muted
+                                remoteVideo.muted = false;
+                                remoteVideo.play().catch(err2 => {
+                                    console.error('❌ [VIEWER] Unmuted play also failed:', err2);
+                                });
+                            });
+                        }, 100);
                     };
                 });
                 
                 peer.on('connect', () => {
                     console.log(`🤝 [VIEWER] Peer connected!`);
                     updateStatus('✅ Connected to streamer!', 'connected');
+                    
+                    // Check for existing streams after connection
+                    const receivers = peer._pc.getReceivers();
+                    console.log('🔍 [VIEWER] WebRTC receivers after connect:', receivers.length);
+                    receivers.forEach((receiver, index) => {
+                        console.log(`📺 [VIEWER] Receiver ${index}:`, {
+                            track: receiver.track?.kind,
+                            trackState: receiver.track?.readyState
+                        });
+                    });
                 });
                 
                 peer.on('error', (err) => {
@@ -227,6 +347,26 @@
                             foundation: event.candidate.foundation,
                             full: event.candidate.candidate
                         });
+                        
+                        // Force ICE candidate exchange since SimplePeer's trickle is broken
+                        console.log(`🚀 [VIEWER] Force-sending ICE candidate since SimplePeer won't`);
+                        try {
+                            // Use the proper RTCIceCandidateInit format that SimplePeer expects
+                            ws.send(JSON.stringify({
+                                type: 'signal',
+                                data: {
+                                    type: 'candidate', 
+                                    candidate: {
+                                        candidate: event.candidate.candidate,
+                                        sdpMLineIndex: event.candidate.sdpMLineIndex,
+                                        sdpMid: event.candidate.sdpMid
+                                    }
+                                }
+                            }));
+                            console.log(`✅ [VIEWER] ICE candidate force-sent`);
+                        } catch (error) {
+                            console.error(`❌ [VIEWER] Failed to force-send ICE candidate:`, error);
+                        }
                     } else {
                         console.log(`✅ [VIEWER] ICE gathering complete`);
                     }

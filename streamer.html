@@ -97,6 +97,7 @@
         async function startStream() {
             try {
                 updateStatus('Requesting camera access...', 'info');
+                console.log('🎥 [STREAMER] Requesting getUserMedia...');
                 
                 localStream = await navigator.mediaDevices.getUserMedia({
                     video: { 
@@ -107,13 +108,48 @@
                     audio: true
                 });
                 
+                console.log('🎥 [STREAMER] Got media stream:', localStream);
+                console.log('🎥 [STREAMER] Video tracks:', localStream.getVideoTracks().length);
+                console.log('🎥 [STREAMER] Audio tracks:', localStream.getAudioTracks().length);
+                
+                localStream.getTracks().forEach((track, index) => {
+                    console.log(`📊 [STREAMER] Track ${index}:`, {
+                        kind: track.kind,
+                        enabled: track.enabled,
+                        readyState: track.readyState,
+                        label: track.label
+                    });
+                });
+                
                 localVideo.srcObject = localStream;
+                console.log('🎥 [STREAMER] Set video srcObject');
+                
+                // Wait for video to load
+                localVideo.onloadedmetadata = () => {
+                    console.log('🎥 [STREAMER] Local video metadata loaded:', {
+                        videoWidth: localVideo.videoWidth,
+                        videoHeight: localVideo.videoHeight,
+                        duration: localVideo.duration
+                    });
+                    
+                    // Check if OBS Virtual Camera is actually producing video
+                    if (localVideo.videoWidth <= 2 || localVideo.videoHeight <= 2) {
+                        console.warn('⚠️ [STREAMER] OBS Virtual Camera producing tiny video! Check OBS is running and camera is started.');
+                    }
+                    
+                    // Verify tracks are producing data
+                    localStream.getVideoTracks().forEach((track, index) => {
+                        console.log(`🎬 [STREAMER] Video track ${index} settings:`, track.getSettings());
+                        console.log(`📊 [STREAMER] Video track ${index} constraints:`, track.getConstraints());
+                    });
+                };
+                
                 startBtn.disabled = true;
                 connectBtn.disabled = false;
                 
                 updateStatus('Camera started - Ready to connect', 'connected');
             } catch (err) {
-                console.error('Error accessing camera:', err);
+                console.error('❌ [STREAMER] Error accessing camera:', err);
                 updateStatus('Error accessing camera: ' + err.message, 'error');
             }
         }
@@ -144,12 +180,12 @@
                 
                 peer = new SimplePeer({
                     initiator: true,
-                    trickle: true,
+                    trickle: true, // Re-enable trickle ICE
                     stream: localStream,
                     config: {
-                        iceServers: [
-                            { urls: 'stun:stun.l.google.com:19302' }
-                        ],
+                        // For localhost testing, disable STUN to force local connection
+                        iceServers: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 
+                            [] : [{ urls: 'stun:stun.l.google.com:19302' }],
                         iceTransportPolicy: 'all',
                         iceCandidatePoolSize: 10,
                         rtcpMuxPolicy: 'require',
@@ -158,21 +194,72 @@
                 });
                 
                 peer.on('signal', (data) => {
-                    console.log(`📤 [STREAMER] Sending signal:`, data.type);
+                    console.log(`📤 [STREAMER] Sending signal:`, data.type || 'unknown');
+                    console.log(`📤 [STREAMER] Full signal data:`, data);
+                    
                     if (data.type === 'offer') {
                         console.log(`📋 [STREAMER] Offer SDP:`, data.sdp?.substring(0, 100) + '...');
                     } else if (data.type === 'answer') {
                         console.log(`📋 [STREAMER] Answer SDP:`, data.sdp?.substring(0, 100) + '...');
+                    } else if (data.candidate) {
+                        console.log(`🧊 [STREAMER] ICE candidate in signal:`, data.candidate);
+                    } else {
+                        console.log(`❓ [STREAMER] Unknown signal type:`, data);
                     }
-                    ws.send(JSON.stringify({
-                        type: 'signal',
-                        data: data
-                    }));
+                    
+                    try {
+                        ws.send(JSON.stringify({
+                            type: 'signal',
+                            data: data
+                        }));
+                        console.log(`✅ [STREAMER] Signal sent successfully`);
+                    } catch (error) {
+                        console.error(`❌ [STREAMER] Failed to send signal:`, error);
+                    }
                 });
                 
+                // Add timeout to force signal if needed
+                setTimeout(() => {
+                    console.log('⏰ [STREAMER] 5 second timeout - checking peer state');
+                    console.log('🔍 [STREAMER] Peer destroyed?', peer.destroyed);
+                    console.log('🔍 [STREAMER] Peer initiator?', peer.initiator);
+                    console.log('🔍 [STREAMER] ICE gathering state:', peer._pc.iceGatheringState);
+                    console.log('🔍 [STREAMER] Signaling state:', peer._pc.signalingState);
+                }, 5000);
+                
                 peer.on('connect', () => {
+                    console.log('🤝 [STREAMER] Peer data channel connected!');
                     updateStatus('✅ Connected to viewer!', 'connected');
                     connectBtn.disabled = true;
+                    
+                    // Comprehensive WebRTC sender verification
+                    console.log('🔍 [STREAMER] Verifying stream after connect:', {
+                        streamId: localStream?.id,
+                        tracks: localStream?.getTracks().length,
+                        peerStreams: peer._pc.getLocalStreams ? peer._pc.getLocalStreams().length : 'N/A'
+                    });
+                    
+                    // Check WebRTC senders
+                    const senders = peer._pc.getSenders();
+                    console.log('📤 [STREAMER] WebRTC senders:', senders.length);
+                    senders.forEach((sender, index) => {
+                        console.log(`📺 [STREAMER] Sender ${index}:`, {
+                            track: sender.track?.kind,
+                            trackEnabled: sender.track?.enabled,
+                            trackState: sender.track?.readyState,
+                            trackLabel: sender.track?.label
+                        });
+                    });
+                    
+                    // Verify tracks are still live
+                    localStream.getTracks().forEach((track, index) => {
+                        console.log(`🎬 [STREAMER] Local track ${index} status:`, {
+                            kind: track.kind,
+                            enabled: track.enabled,
+                            readyState: track.readyState,
+                            muted: track.muted
+                        });
+                    });
                 });
                 
                 peer.on('error', (err) => {
@@ -184,10 +271,63 @@
                 peer._pc.oniceconnectionstatechange = () => {
                     console.log(`🔗 [STREAMER] ICE connection state: ${peer._pc.iceConnectionState}`);
                     updateStatus(`ICE: ${peer._pc.iceConnectionState}`, 'info');
+                    
+                    // Check if we're connected but peer.on('connect') didn't fire
+                    if (peer._pc.iceConnectionState === 'connected' || peer._pc.iceConnectionState === 'completed') {
+                        console.log('✅ [STREAMER] ICE connected! Checking senders...');
+                        
+                        // Verify senders immediately when ICE connects
+                        const senders = peer._pc.getSenders();
+                        console.log('📤 [STREAMER] WebRTC senders at ICE connect:', senders.length);
+                        senders.forEach((sender, index) => {
+                            console.log(`📺 [STREAMER] Sender ${index}:`, {
+                                track: sender.track?.kind,
+                                trackEnabled: sender.track?.enabled,
+                                trackState: sender.track?.readyState,
+                                trackLabel: sender.track?.label?.substring(0, 20) + '...'
+                            });
+                        });
+                        
+                        // Check if tracks are still good
+                        console.log('🎬 [STREAMER] Local stream status at ICE connect:', {
+                            active: localStream.active,
+                            tracks: localStream.getTracks().length
+                        });
+                        localStream.getTracks().forEach((track, index) => {
+                            console.log(`🎵 [STREAMER] Track ${index}:`, {
+                                kind: track.kind,
+                                enabled: track.enabled,
+                                readyState: track.readyState,
+                                muted: track.muted
+                            });
+                        });
+                    }
                 };
                 
                 peer._pc.onicegatheringstatechange = () => {
                     console.log(`📡 [STREAMER] ICE gathering state: ${peer._pc.iceGatheringState}`);
+                    
+                    // When gathering completes, start polling connection state
+                    if (peer._pc.iceGatheringState === 'complete') {
+                        console.log(`🔍 [STREAMER] Starting ICE state monitoring...`);
+                        
+                        const pollICEState = () => {
+                            console.log(`📊 [STREAMER] Current states:`, {
+                                iceConnection: peer._pc.iceConnectionState,
+                                iceGathering: peer._pc.iceGatheringState,
+                                connection: peer._pc.connectionState,
+                                signalingState: peer._pc.signalingState
+                            });
+                        };
+                        
+                        // Poll every 2 seconds for 10 seconds to see what's happening
+                        pollICEState(); // immediate
+                        setTimeout(pollICEState, 2000);
+                        setTimeout(pollICEState, 4000);
+                        setTimeout(pollICEState, 6000);
+                        setTimeout(pollICEState, 8000);
+                        setTimeout(pollICEState, 10000);
+                    }
                 };
                 
                 peer._pc.onconnectionstatechange = () => {
@@ -205,6 +345,26 @@
                             foundation: event.candidate.foundation,
                             full: event.candidate.candidate
                         });
+                        
+                        // Force ICE candidate exchange since SimplePeer's trickle is broken
+                        console.log(`🚀 [STREAMER] Force-sending ICE candidate since SimplePeer won't`);
+                        try {
+                            // Use the proper RTCIceCandidateInit format that SimplePeer expects
+                            ws.send(JSON.stringify({
+                                type: 'signal',
+                                data: {
+                                    type: 'candidate',
+                                    candidate: {
+                                        candidate: event.candidate.candidate,
+                                        sdpMLineIndex: event.candidate.sdpMLineIndex,
+                                        sdpMid: event.candidate.sdpMid
+                                    }
+                                }
+                            }));
+                            console.log(`✅ [STREAMER] ICE candidate force-sent`);
+                        } catch (error) {
+                            console.error(`❌ [STREAMER] Failed to force-send ICE candidate:`, error);
+                        }
                     } else {
                         console.log(`✅ [STREAMER] ICE gathering complete`);
                     }
