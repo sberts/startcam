@@ -122,8 +122,10 @@ wss.on('connection', (ws, req) => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`Streamer: http://localhost:${PORT}/streamer.html`);
-  console.log(`Viewer: http://localhost:${PORT}/viewer.html`);
+const HOST = '0.0.0.0'; // Listen on all network interfaces
+server.listen(PORT, HOST, () => {
+  console.log(`Server running on ${HOST}:${PORT}`);
+  console.log(`Access from any device on your network:`);
+  console.log(`Streamer: http://YOUR_IP:${PORT}/streamer.html`);
+  console.log(`Viewer: http://YOUR_IP:${PORT}/viewer.html`);
 });

@@ -75,6 +75,8 @@
     
     <div>
         <button id="startBtn" onclick="startStream()">Start Camera</button>
+        <button id="switchCameraBtn" onclick="switchCamera()" disabled style="display: none;">Switch Camera</button>
+        <button id="muteBtn" onclick="toggleMute()" disabled>🎤 Mute</button>
         <button id="connectBtn" onclick="connectToPeer()" disabled>Connect to Viewer</button>
     </div>
 
@@ -83,15 +85,38 @@
         let localStream = null;
         let peer = null;
         let ws = null;
+        let currentCamera = 'user'; // 'user' for front, 'environment' for rear
+        let availableCameras = [];
+        let isMuted = false;
         
         const localVideo = document.getElementById('localVideo');
         const status = document.getElementById('status');
         const startBtn = document.getElementById('startBtn');
+        const switchCameraBtn = document.getElementById('switchCameraBtn');
+        const muteBtn = document.getElementById('muteBtn');
         const connectBtn = document.getElementById('connectBtn');
         
         function updateStatus(message, type = 'info') {
             status.textContent = message;
             status.className = `status ${type}`;
+        }
+        
+        // Check available cameras
+        async function detectCameras() {
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                availableCameras = devices.filter(device => device.kind === 'videoinput');
+                console.log('📱 [STREAMER] Available cameras:', availableCameras.length);
+                
+                // Show switch button if multiple cameras available or on mobile
+                const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+                if (availableCameras.length > 1 || isMobile) {
+                    switchCameraBtn.style.display = 'inline-block';
+                    console.log('📱 [STREAMER] Camera switching enabled');
+                }
+            } catch (error) {
+                console.error('❌ [STREAMER] Error detecting cameras:', error);
+            }
         }
         
         async function startStream() {
@@ -103,7 +128,8 @@
                     video: { 
                         width: { ideal: 1280 },
                         height: { ideal: 720 },
-                        frameRate: { ideal: 30 }
+                        frameRate: { ideal: 30 },
+                        facingMode: currentCamera
                     },
                     audio: true
                 });
@@ -145,6 +171,8 @@
                 };
                 
                 startBtn.disabled = true;
+                switchCameraBtn.disabled = false;
+                muteBtn.disabled = false;
                 connectBtn.disabled = false;
                 
                 updateStatus('Camera started - Ready to connect', 'connected');
@@ -152,6 +180,104 @@
                 console.error('❌ [STREAMER] Error accessing camera:', err);
                 updateStatus('Error accessing camera: ' + err.message, 'error');
             }
+        }
+        
+        // Switch between front and rear camera
+        async function switchCamera() {
+            if (!localStream) return;
+            
+            try {
+                console.log('📱 [STREAMER] Switching camera from:', currentCamera);
+                
+                // Toggle camera
+                currentCamera = currentCamera === 'user' ? 'environment' : 'user';
+                console.log('📱 [STREAMER] Switching to:', currentCamera);
+                
+                // Stop current stream
+                localStream.getTracks().forEach(track => track.stop());
+                
+                // Request new stream with different camera
+                updateStatus('Switching camera...', 'info');
+                
+                localStream = await navigator.mediaDevices.getUserMedia({
+                    video: { 
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 },
+                        frameRate: { ideal: 30 },
+                        facingMode: currentCamera
+                    },
+                    audio: true
+                });
+                
+                console.log('📱 [STREAMER] Camera switched successfully');
+                localVideo.srcObject = localStream;
+                
+                // Restore mute state after camera switch
+                if (isMuted) {
+                    localStream.getAudioTracks().forEach(track => {
+                        track.enabled = false;
+                    });
+                    console.log('🎤 [STREAMER] Restored muted state after camera switch');
+                }
+                
+                // If connected to peer, update the stream
+                if (peer && !peer.destroyed) {
+                    console.log('📱 [STREAMER] Updating peer stream after camera switch');
+                    
+                    // Remove old tracks
+                    const senders = peer._pc.getSenders();
+                    for (const sender of senders) {
+                        if (sender.track && sender.track.kind === 'video') {
+                            await sender.replaceTrack(localStream.getVideoTracks()[0]);
+                            console.log('📱 [STREAMER] Replaced video track in peer connection');
+                        }
+                    }
+                }
+                
+                updateStatus('Camera switched - Ready to connect', 'connected');
+            } catch (err) {
+                console.error('❌ [STREAMER] Error switching camera:', err);
+                updateStatus('Camera switch failed: ' + err.message, 'error');
+                
+                // Try to restore previous camera
+                currentCamera = currentCamera === 'user' ? 'environment' : 'user';
+            }
+        }
+        
+        // Toggle audio mute
+        function toggleMute() {
+            if (!localStream) return;
+            
+            const audioTracks = localStream.getAudioTracks();
+            if (audioTracks.length === 0) {
+                console.warn('⚠️ [STREAMER] No audio tracks to mute');
+                return;
+            }
+            
+            isMuted = !isMuted;
+            
+            // Toggle all audio tracks
+            audioTracks.forEach(track => {
+                track.enabled = !isMuted;
+            });
+            
+            // Update button text and visual feedback
+            muteBtn.textContent = isMuted ? '🔇 Unmute' : '🎤 Mute';
+            muteBtn.style.backgroundColor = isMuted ? '#dc3545' : '#007bff';
+            
+            // Update status
+            const statusMsg = isMuted ? 'Microphone muted' : 'Microphone unmuted';
+            console.log(`🎤 [STREAMER] ${statusMsg}`);
+            updateStatus(statusMsg, isMuted ? 'error' : 'connected');
+            
+            // Show temporary status message
+            setTimeout(() => {
+                if (peer && !peer.destroyed) {
+                    updateStatus('✅ Connected to viewer!', 'connected');
+                } else {
+                    updateStatus('Camera started - Ready to connect', 'connected');
+                }
+            }, 2000);
         }
         
         function connectToPeer() {
@@ -183,7 +309,7 @@
                     trickle: true, // Re-enable trickle ICE
                     stream: localStream,
                     config: {
-                        // No STUN servers - local network only (10.25.0.0/16)
+                        // No STUN servers - local network only
                         iceServers: [],
                         iceTransportPolicy: 'all',
                         iceCandidatePoolSize: 10,
@@ -416,6 +542,11 @@
                 updateStatus('Disconnected from signaling server', 'error');
             };
         }
+        
+        // Initialize camera detection on page load
+        window.addEventListener('load', () => {
+            detectCameras();
+        });
         
         window.addEventListener('beforeunload', () => {
             if (localStream) {
