@@ -162,9 +162,8 @@
                     initiator: false,
                     trickle: true, // Re-enable trickle ICE
                     config: {
-                        // For localhost testing, disable STUN to force local connection
-                        iceServers: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 
-                            [] : [{ urls: 'stun:stun.l.google.com:19302' }],
+                        // No STUN servers - local network only (10.25.0.0/16)
+                        iceServers: [],
                         iceTransportPolicy: 'all',
                         iceCandidatePoolSize: 10,
                         rtcpMuxPolicy: 'require',
@@ -338,7 +337,8 @@
                 // Add ICE candidate debugging for viewer
                 peer._pc.onicecandidate = (event) => {
                     if (event.candidate) {
-                        console.log(`🧊 [VIEWER] ICE candidate:`, {
+                        const is10_25 = event.candidate.address?.startsWith('10.25.');
+                        console.log(`🧊 [VIEWER] ICE candidate${is10_25 ? ' ⭐ (10.25 network)' : ''}:`, {
                             type: event.candidate.type,
                             protocol: event.candidate.protocol,
                             address: event.candidate.address,
