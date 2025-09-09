@@ -462,7 +462,7 @@
                 peer._pc.onicecandidate = (event) => {
                     if (event.candidate) {
                         const is10_25 = event.candidate.address?.startsWith('10.25.');
-                        const isVPN = event.candidate.address === '10.25.200.51';
+                        const isVPN = event.candidate.address === '10.25.200.50';
                         const isLocal = event.candidate.address?.endsWith('.local');
                         const isHost = event.candidate.type === 'host';
                         
