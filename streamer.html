@@ -346,25 +346,26 @@
                 updateStatus('Creating peer connection...', 'info');
                 addDebugMessage('🔧 Creating SimplePeer');
                 
-                peer = new SimplePeer({
-                    initiator: true,
-                    trickle: false, // Disable trickle - we'll force specific IPs
-                    stream: localStream,
-                    config: {
-                        // Force specific VPN IPs only
-                        iceServers: [
-                            {
-                                urls: [],
-                                // Force these specific IP addresses
-                                iceTransportPolicy: 'all'
-                            }
-                        ],
-                        iceTransportPolicy: 'all',
-                        iceCandidatePoolSize: 0,
-                        rtcpMuxPolicy: 'require',
-                        bundlePolicy: 'max-bundle'
-                    }
-                });
+                try {
+                    peer = new SimplePeer({
+                        initiator: true,
+                        trickle: false, // Disable trickle - we'll force specific IPs
+                        stream: localStream,
+                        config: {
+                            // Force specific VPN IPs only
+                            iceServers: [],
+                            iceTransportPolicy: 'all',
+                            iceCandidatePoolSize: 0,
+                            rtcpMuxPolicy: 'require',
+                            bundlePolicy: 'max-bundle'
+                        }
+                    });
+                    addDebugMessage('✅ SimplePeer created');
+                } catch (error) {
+                    addDebugMessage(`❌ SimplePeer failed: ${error.message}`);
+                    updateStatus('Peer creation failed: ' + error.message, 'error');
+                    return;
+                }
                 
                 
                 peer.on('signal', (data) => {
