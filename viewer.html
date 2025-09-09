@@ -8,18 +8,18 @@
         body {
             font-family: Arial, sans-serif;
             margin: 0;
-            padding: 20px;
-            background: #1a1a1a;
+            padding: 0;
+            background: #000;
             color: white;
             text-align: center;
+            overflow: hidden;
         }
         
         #remoteVideo {
-            width: 100%;
-            max-width: 1024px;
-            height: auto;
-            border: 2px solid #333;
-            border-radius: 8px;
+            width: 100vw;
+            height: 100vh;
+            object-fit: contain;
+            border: none;
             background: black;
         }
         
@@ -71,20 +71,37 @@
             font-size: 18px;
             color: #ccc;
         }
+        
+        .controls {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: none;
+        }
+        
+        .status-overlay {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+        }
     </style>
 </head>
 <body>
-    <h1>🖥️ StartCam Viewer</h1>
-    <div id="status" class="status info">Ready to receive stream</div>
+    <video id="remoteVideo" autoplay playsinline muted></video>
     
-    <video id="remoteVideo" autoplay playsinline controls></video>
+    <div class="status-overlay">
+        <div id="status" class="status info">Connecting...</div>
+    </div>
     
     <div class="waiting" id="waitingMessage">
         Waiting for streamer to connect...
     </div>
     
-    <div>
-        <button id="connectBtn" onclick="connect()">Connect to Streamer</button>
+    <div class="controls" id="controls">
+        <button id="connectBtn" onclick="connect()">Reconnect</button>
         <button id="fullscreenBtn" onclick="toggleFullscreen()" disabled>Fullscreen</button>
     </div>
 
@@ -92,12 +109,20 @@
     <script>
         let peer = null;
         let ws = null;
+        let autoConnect = true;
+        let autoFullscreen = true;
         
         const remoteVideo = document.getElementById('remoteVideo');
         const status = document.getElementById('status');
         const connectBtn = document.getElementById('connectBtn');
         const fullscreenBtn = document.getElementById('fullscreenBtn');
         const waitingMessage = document.getElementById('waitingMessage');
+        const controls = document.getElementById('controls');
+        
+        // Parse URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        autoConnect = urlParams.get('autoConnect') !== 'false';
+        autoFullscreen = urlParams.get('autoFullscreen') !== 'false';
         
         function updateStatus(message, type = 'info') {
             status.textContent = message;
@@ -113,6 +138,7 @@
             if (ws) ws.close();
             
             connectBtn.disabled = true;
+            controls.style.display = 'none';
             
             // Create WebSocket
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -160,11 +186,13 @@
                 console.error(`❌ [VIEWER] WebSocket error:`, error);
                 updateStatus('Connection error', 'error');
                 connectBtn.disabled = false;
+                controls.style.display = 'block';
             };
             
             ws.onclose = () => {
                 updateStatus('Disconnected from server', 'error');
                 connectBtn.disabled = false;
+                controls.style.display = 'block';
             };
         }
         
@@ -280,6 +308,7 @@
                     waitingMessage.style.display = 'none';
                     fullscreenBtn.disabled = false;
                     updateStatus('✅ Receiving video stream!', 'connected');
+                    hideStatusAfterDelay();
                     
                     // Auto-enter fullscreen when video starts playing
                     remoteVideo.onloadedmetadata = () => {
@@ -320,7 +349,9 @@
                                     console.log('🔊 [VIEWER] Attempted to unmute after play');
                                 }, 500);
                                 
-                                enterFullscreen();
+                                if (autoFullscreen) {
+                                    enterFullscreen();
+                                }
                             }).catch(err => {
                                 console.error('❌ [VIEWER] Video play() failed:', err);
                                 
@@ -353,6 +384,7 @@
                     console.error(`❌ [VIEWER] Peer error:`, err);
                     updateStatus('Connection failed: ' + err.message, 'error');
                     connectBtn.disabled = false;
+                    controls.style.display = 'block';
                 });
                 
                 // ICE connection debugging
@@ -370,6 +402,7 @@
                         console.log(`❌ [VIEWER] ICE FAILED! Cannot reach streamer.`);
                         updateStatus('❌ ICE failed - Cannot reach streamer', 'error');
                         connectBtn.disabled = false;
+                        controls.style.display = 'block';
                     } else if (peer._pc.iceConnectionState === 'disconnected') {
                         console.log(`⚠️ [VIEWER] ICE DISCONNECTED! Connection lost.`);
                         updateStatus('⚠️ Connection lost', 'error');
@@ -461,6 +494,24 @@
             if (peer) peer.destroy();
             if (ws) ws.close();
         });
+        
+        // Auto-connect when page loads
+        window.addEventListener('load', () => {
+            if (autoConnect) {
+                connect();
+            } else {
+                controls.style.display = 'block';
+            }
+        });
+        
+        // Hide status overlay after successful connection
+        function hideStatusAfterDelay() {
+            setTimeout(() => {
+                if (remoteVideo.srcObject) {
+                    document.querySelector('.status-overlay').style.display = 'none';
+                }
+            }, 5000);
+        }
     </script>
 </body>
 </html>
