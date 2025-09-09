@@ -306,17 +306,40 @@
                 
                 peer = new SimplePeer({
                     initiator: true,
-                    trickle: true, // Re-enable trickle ICE
+                    trickle: false, // Disable trickle - we'll force specific IPs
                     stream: localStream,
                     config: {
-                        // No STUN servers - local network only
-                        iceServers: [],
+                        // Force specific VPN IPs only
+                        iceServers: [
+                            {
+                                urls: [],
+                                // Force these specific IP addresses
+                                iceTransportPolicy: 'all'
+                            }
+                        ],
                         iceTransportPolicy: 'all',
-                        iceCandidatePoolSize: 10,
+                        iceCandidatePoolSize: 0,
                         rtcpMuxPolicy: 'require',
                         bundlePolicy: 'max-bundle'
                     }
                 });
+                
+                // Force inject hardcoded VPN IP candidates immediately
+                setTimeout(() => {
+                    const forcedCandidate = {
+                        type: 'candidate',
+                        candidate: {
+                            candidate: `candidate:1 1 UDP 2113667327 10.25.200.50 54400 typ host generation 0 ufrag 4ZcD network-id 3 network-cost 900`,
+                            sdpMLineIndex: 0,
+                            sdpMid: '0'
+                        }
+                    };
+                    console.log(`🎯 [STREAMER] Force-sending hardcoded VPN IP candidate`);
+                    ws.send(JSON.stringify({
+                        type: 'signal',
+                        data: forcedCandidate
+                    }));
+                }, 100);
                 
                 peer.on('signal', (data) => {
                     console.log(`📤 [STREAMER] Sending signal:`, data.type || 'unknown');
@@ -475,46 +498,7 @@
                 
                 peer._pc.onicecandidate = (event) => {
                     if (event.candidate) {
-                        const is10_25 = event.candidate.address?.startsWith('10.25.');
-                        const isVPN = event.candidate.address === '10.25.200.50';
-                        const isLocal = event.candidate.address?.endsWith('.local');
-                        const isHost = event.candidate.type === 'host';
-                        
-                        console.log(`🧊 [STREAMER] ICE candidate${isVPN ? ' 🎯 (VPN IP)' : is10_25 ? ' ⭐ (10.25 network)' : isLocal ? ' 🏠 (.local)' : ''}:`, {
-                            type: event.candidate.type,
-                            protocol: event.candidate.protocol,
-                            address: event.candidate.address,
-                            port: event.candidate.port,
-                            priority: event.candidate.priority,
-                            foundation: event.candidate.foundation,
-                            full: event.candidate.candidate
-                        });
-                        
-                        // Only allow actual IP addresses, not .local hostnames that won't resolve remotely
-                        if (isVPN || is10_25) {
-                            const candidateType = isVPN ? 'VPN' : '10.25';
-                            console.log(`🚀 [STREAMER] Sending ${candidateType} ICE candidate`);
-                            try {
-                                ws.send(JSON.stringify({
-                                    type: 'signal',
-                                    data: {
-                                        type: 'candidate',
-                                        candidate: {
-                                            candidate: event.candidate.candidate,
-                                            sdpMLineIndex: event.candidate.sdpMLineIndex,
-                                            sdpMid: event.candidate.sdpMid
-                                        }
-                                    }
-                                }));
-                                console.log(`✅ [STREAMER] ICE candidate sent`);
-                            } catch (error) {
-                                console.error(`❌ [STREAMER] Failed to send ICE candidate:`, error);
-                            }
-                        } else if (isLocal) {
-                            console.log(`🚫 [STREAMER] Skipping .local candidate (won't resolve remotely): ${event.candidate.address}`);
-                        } else {
-                            console.log(`🚫 [STREAMER] Filtered out candidate from: ${event.candidate.address}`);
-                        }
+                        console.log(`🧊 [STREAMER] ICE candidate (ignored - using forced IPs):`, event.candidate.address);
                     } else {
                         console.log(`✅ [STREAMER] ICE gathering complete`);
                     }
