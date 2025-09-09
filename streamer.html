@@ -349,7 +349,7 @@
                 try {
                     peer = new SimplePeer({
                         initiator: true,
-                        trickle: false, // Disable trickle - we'll force specific IPs
+                        trickle: true, // Enable trickle to get signals
                         stream: localStream,
                         config: {
                             // Force specific VPN IPs only

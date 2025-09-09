@@ -169,7 +169,7 @@
                 // Create peer when we receive an offer
                 peer = new SimplePeer({
                     initiator: false,
-                    trickle: false, // Disable trickle - we'll force specific IPs
+                    trickle: true, // Enable trickle to get signals
                     config: {
                         // Force specific VPN IPs only
                         iceServers: [],
