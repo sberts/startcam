@@ -171,31 +171,31 @@
                     }
                 });
                 
-                // Force inject hardcoded VPN IP candidates immediately
-                setTimeout(() => {
-                    const forcedCandidate = {
-                        type: 'candidate',
-                        candidate: {
-                            candidate: `candidate:1 1 UDP 2113667327 10.25.20.10 54400 typ host generation 0 ufrag 4ZcD network-id 3 network-cost 900`,
-                            sdpMLineIndex: 0,
-                            sdpMid: '0'
-                        }
-                    };
-                    console.log(`🎯 [VIEWER] Force-sending hardcoded VPN IP candidate`);
-                    ws.send(JSON.stringify({
-                        type: 'signal',
-                        data: forcedCandidate
-                    }));
-                }, 100);
-                
-                // Set up peer event handlers
+                // Force inject hardcoded VPN IP candidates after SDP exchange
                 peer.on('signal', (signalData) => {
                     console.log(`📤 [VIEWER] Sending:`, signalData.type);
                     ws.send(JSON.stringify({
                         type: 'signal',
                         data: signalData
                     }));
+                    
+                    // After sending answer, inject forced candidate
+                    if (signalData.type === 'answer') {
+                        setTimeout(() => {
+                            const forcedCandidate = {
+                                candidate: `candidate:1 1 UDP 2113667327 10.25.20.10 54400 typ host generation 0 ufrag 4ZcD network-id 3 network-cost 900`,
+                                sdpMLineIndex: 0,
+                                sdpMid: '0'
+                            };
+                            console.log(`🎯 [VIEWER] Force-sending hardcoded VPN IP candidate`);
+                            ws.send(JSON.stringify({
+                                type: 'signal',
+                                data: forcedCandidate
+                            }));
+                        }, 100);
+                    }
                 });
+                
                 
                 peer.on('stream', (stream) => {
                     console.log(`🎥 [VIEWER] Received stream!`, stream);

@@ -324,36 +324,9 @@
                     }
                 });
                 
-                // Force inject hardcoded VPN IP candidates immediately
-                setTimeout(() => {
-                    const forcedCandidate = {
-                        type: 'candidate',
-                        candidate: {
-                            candidate: `candidate:1 1 UDP 2113667327 10.25.200.50 54400 typ host generation 0 ufrag 4ZcD network-id 3 network-cost 900`,
-                            sdpMLineIndex: 0,
-                            sdpMid: '0'
-                        }
-                    };
-                    console.log(`🎯 [STREAMER] Force-sending hardcoded VPN IP candidate`);
-                    ws.send(JSON.stringify({
-                        type: 'signal',
-                        data: forcedCandidate
-                    }));
-                }, 100);
                 
                 peer.on('signal', (data) => {
                     console.log(`📤 [STREAMER] Sending signal:`, data.type || 'unknown');
-                    console.log(`📤 [STREAMER] Full signal data:`, data);
-                    
-                    if (data.type === 'offer') {
-                        console.log(`📋 [STREAMER] Offer SDP:`, data.sdp?.substring(0, 100) + '...');
-                    } else if (data.type === 'answer') {
-                        console.log(`📋 [STREAMER] Answer SDP:`, data.sdp?.substring(0, 100) + '...');
-                    } else if (data.candidate) {
-                        console.log(`🧊 [STREAMER] ICE candidate in signal:`, data.candidate);
-                    } else {
-                        console.log(`❓ [STREAMER] Unknown signal type:`, data);
-                    }
                     
                     try {
                         ws.send(JSON.stringify({
@@ -361,6 +334,22 @@
                             data: data
                         }));
                         console.log(`✅ [STREAMER] Signal sent successfully`);
+                        
+                        // After sending offer, inject forced candidate
+                        if (data.type === 'offer') {
+                            setTimeout(() => {
+                                const forcedCandidate = {
+                                    candidate: `candidate:1 1 UDP 2113667327 10.25.200.50 54400 typ host generation 0 ufrag 4ZcD network-id 3 network-cost 900`,
+                                    sdpMLineIndex: 0,
+                                    sdpMid: '0'
+                                };
+                                console.log(`🎯 [STREAMER] Force-sending hardcoded VPN IP candidate`);
+                                ws.send(JSON.stringify({
+                                    type: 'signal',
+                                    data: forcedCandidate
+                                }));
+                            }, 100);
+                        }
                     } catch (error) {
                         console.error(`❌ [STREAMER] Failed to send signal:`, error);
                     }
