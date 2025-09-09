@@ -99,6 +99,38 @@
         function updateStatus(message, type = 'info') {
             status.textContent = message;
             status.className = `status ${type}`;
+            console.log(`📱 [STREAMER] ${message}`);
+        }
+        
+        // Add debug messages to page
+        function addDebugMessage(message) {
+            const debugDiv = document.getElementById('debug') || createDebugDiv();
+            const timestamp = new Date().toLocaleTimeString();
+            debugDiv.innerHTML += `<div>[${timestamp}] ${message}</div>`;
+            debugDiv.scrollTop = debugDiv.scrollHeight;
+            console.log(`🔍 [STREAMER DEBUG] ${message}`);
+        }
+        
+        function createDebugDiv() {
+            const debugDiv = document.createElement('div');
+            debugDiv.id = 'debug';
+            debugDiv.style.cssText = `
+                position: fixed;
+                top: 10px;
+                right: 10px;
+                width: 300px;
+                height: 200px;
+                background: rgba(0,0,0,0.8);
+                color: lime;
+                font-family: monospace;
+                font-size: 10px;
+                padding: 10px;
+                border-radius: 5px;
+                overflow-y: auto;
+                z-index: 1000;
+            `;
+            document.body.appendChild(debugDiv);
+            return debugDiv;
         }
         
         // Check available cameras
@@ -281,28 +313,38 @@
         }
         
         function connectToPeer() {
+            addDebugMessage('🚀 connectToPeer() called');
+            
             if (!localStream) {
+                addDebugMessage('❌ No localStream');
                 updateStatus('Start camera first', 'error');
                 return;
             }
             
+            addDebugMessage('✅ localStream exists');
+            
             // Prevent multiple connections
             if (peer && !peer.destroyed) {
-                console.log('🔄 [STREAMER] Destroying existing peer connection');
+                addDebugMessage('🔄 Destroying existing peer');
                 peer.destroy();
             }
             if (ws && ws.readyState === WebSocket.OPEN) {
-                console.log('🔄 [STREAMER] Closing existing WebSocket');
+                addDebugMessage('🔄 Closing existing WebSocket');
                 ws.close();
             }
             
             updateStatus('Connecting to signaling server...', 'info');
+            addDebugMessage('📡 Creating WebSocket connection');
             
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            ws = new WebSocket(`${protocol}//${window.location.host}`);
+            const wsUrl = `${protocol}//${window.location.host}`;
+            addDebugMessage(`🔗 WebSocket URL: ${wsUrl}`);
+            ws = new WebSocket(wsUrl);
             
             ws.onopen = () => {
+                addDebugMessage('✅ WebSocket connected');
                 updateStatus('Creating peer connection...', 'info');
+                addDebugMessage('🔧 Creating SimplePeer');
                 
                 peer = new SimplePeer({
                     initiator: true,
@@ -326,32 +368,33 @@
                 
                 
                 peer.on('signal', (data) => {
-                    console.log(`📤 [STREAMER] Sending signal:`, data.type || 'unknown');
+                    addDebugMessage(`📤 Sending: ${data.type || 'unknown'}`);
                     
                     try {
                         ws.send(JSON.stringify({
                             type: 'signal',
                             data: data
                         }));
-                        console.log(`✅ [STREAMER] Signal sent successfully`);
+                        addDebugMessage(`✅ Signal sent: ${data.type}`);
                         
                         // After sending offer, inject forced candidate
                         if (data.type === 'offer') {
+                            addDebugMessage('🎯 Injecting VPN candidate');
                             setTimeout(() => {
                                 const forcedCandidate = {
                                     candidate: `candidate:1 1 UDP 2113667327 10.25.200.50 54400 typ host generation 0 ufrag 4ZcD network-id 3 network-cost 900`,
                                     sdpMLineIndex: 0,
                                     sdpMid: '0'
                                 };
-                                console.log(`🎯 [STREAMER] Force-sending hardcoded VPN IP candidate`);
                                 ws.send(JSON.stringify({
                                     type: 'signal',
                                     data: forcedCandidate
                                 }));
+                                addDebugMessage('🎯 VPN candidate sent');
                             }, 100);
                         }
                     } catch (error) {
-                        console.error(`❌ [STREAMER] Failed to send signal:`, error);
+                        addDebugMessage(`❌ Signal failed: ${error.message}`);
                     }
                 });
                 
