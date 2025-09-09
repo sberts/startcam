@@ -463,7 +463,10 @@
                     if (event.candidate) {
                         const is10_25 = event.candidate.address?.startsWith('10.25.');
                         const isVPN = event.candidate.address === '10.25.200.51';
-                        console.log(`🧊 [STREAMER] ICE candidate${isVPN ? ' 🎯 (VPN IP)' : is10_25 ? ' ⭐ (10.25 network)' : ''}:`, {
+                        const isLocal = event.candidate.address?.endsWith('.local');
+                        const isHost = event.candidate.type === 'host';
+                        
+                        console.log(`🧊 [STREAMER] ICE candidate${isVPN ? ' 🎯 (VPN IP)' : is10_25 ? ' ⭐ (10.25 network)' : isLocal ? ' 🏠 (.local)' : ''}:`, {
                             type: event.candidate.type,
                             protocol: event.candidate.protocol,
                             address: event.candidate.address,
@@ -473,9 +476,10 @@
                             full: event.candidate.candidate
                         });
                         
-                        // Only send VPN IP or 10.25 network candidates for testing
-                        if (isVPN || is10_25) {
-                            console.log(`🚀 [STREAMER] Sending ${isVPN ? 'VPN' : '10.25'} ICE candidate`);
+                        // Allow VPN IP, 10.25 network, or local host candidates for testing
+                        if (isVPN || is10_25 || (isLocal && isHost)) {
+                            const candidateType = isVPN ? 'VPN' : is10_25 ? '10.25' : 'local';
+                            console.log(`🚀 [STREAMER] Sending ${candidateType} ICE candidate`);
                             try {
                                 ws.send(JSON.stringify({
                                     type: 'signal',
