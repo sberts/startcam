@@ -130,13 +130,19 @@
                     }
                     
                     const message = JSON.parse(data);
-                    console.log(`📥 [VIEWER] Received:`, message.type);
+                    console.log(`📥 [VIEWER] Received message type:`, message.type);
+                    console.log(`📥 [VIEWER] Full message:`, message);
                     
                     if (message.type === 'signal') {
+                        console.log(`📋 [VIEWER] Signal data type:`, message.data?.type);
+                        console.log(`📋 [VIEWER] Signal data:`, message.data);
                         handleSignal(message.data);
+                    } else {
+                        console.log(`❓ [VIEWER] Unknown message type:`, message.type);
                     }
                 } catch (error) {
-                    console.error(`❌ [VIEWER] Message error:`, error);
+                    console.error(`❌ [VIEWER] Message parsing error:`, error);
+                    console.error(`❌ [VIEWER] Raw data:`, event.data);
                 }
             };
             
@@ -153,8 +159,11 @@
         }
         
         function handleSignal(data) {
+            console.log(`🔍 [VIEWER] handleSignal called with:`, data);
+            
             if (data.type === 'offer') {
                 console.log(`📋 [VIEWER] Processing offer`);
+                console.log(`📋 [VIEWER] Offer SDP length:`, data.sdp?.length);
                 updateStatus('Received offer, creating answer...', 'info');
                 
                 // Create peer when we receive an offer
