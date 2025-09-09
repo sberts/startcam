@@ -352,9 +352,9 @@
                             full: event.candidate.candidate
                         });
                         
-                        // Allow VPN IP, 10.25 network, or local host candidates for testing
-                        if (isVPN || is10_25 || (isLocal && isHost)) {
-                            const candidateType = isVPN ? 'VPN' : is10_25 ? '10.25' : 'local';
+                        // Only allow actual IP addresses, not .local hostnames that won't resolve remotely  
+                        if (isVPN || is10_25) {
+                            const candidateType = isVPN ? 'VPN' : '10.25';
                             console.log(`🚀 [VIEWER] Sending ${candidateType} ICE candidate`);
                             try {
                                 ws.send(JSON.stringify({
@@ -372,6 +372,8 @@
                             } catch (error) {
                                 console.error(`❌ [VIEWER] Failed to send ICE candidate:`, error);
                             }
+                        } else if (isLocal) {
+                            console.log(`🚫 [VIEWER] Skipping .local candidate (won't resolve remotely): ${event.candidate.address}`);
                         } else {
                             console.log(`🚫 [VIEWER] Filtered out candidate from: ${event.candidate.address}`);
                         }
