@@ -175,6 +175,7 @@
                 console.log(`📋 [VIEWER] Processing offer`);
                 console.log(`📋 [VIEWER] Offer SDP length:`, data.sdp?.length);
                 updateStatus('Received offer, creating answer...', 'info');
+                console.log(`⚠️ [VIEWER] DEBUG: About to create SimplePeer for answer`);
                 
                 // Create peer when we receive an offer
                 peer = new SimplePeer({
@@ -192,29 +193,38 @@
                 
                 // Force inject hardcoded VPN IP candidates after SDP exchange
                 peer.on('signal', (signalData) => {
-                    console.log(`📤 [VIEWER] Sending:`, signalData.type);
-                    ws.send(JSON.stringify({
-                        type: 'signal',
-                        data: signalData
-                    }));
+                    console.log(`📤 [VIEWER] Sending signal:`, signalData.type);
+                    console.log(`📤 [VIEWER] Signal data:`, signalData);
                     
-                    // After sending answer, inject forced candidate
-                    if (signalData.type === 'answer') {
-                        setTimeout(() => {
-                            const forcedCandidate = {
-                                type: 'candidate',
-                                candidate: {
-                                    candidate: `candidate:1 1 UDP 2113667327 10.25.20.10 54400 typ host generation 0 ufrag 4ZcD network-id 3 network-cost 900`,
-                                    sdpMLineIndex: 0,
-                                    sdpMid: '0'
-                                }
-                            };
-                            console.log(`🎯 [VIEWER] Force-sending hardcoded VPN IP candidate: 10.25.20.10`);
-                            ws.send(JSON.stringify({
-                                type: 'signal',
-                                data: forcedCandidate
-                            }));
-                        }, 100);
+                    try {
+                        ws.send(JSON.stringify({
+                            type: 'signal',
+                            data: signalData
+                        }));
+                        console.log(`✅ [VIEWER] Signal sent successfully: ${signalData.type}`);
+                        
+                        // After sending answer, inject forced candidate
+                        if (signalData.type === 'answer') {
+                            console.log(`🎯 [VIEWER] Answer sent, now injecting VPN candidate`);
+                            setTimeout(() => {
+                                const forcedCandidate = {
+                                    type: 'candidate',
+                                    candidate: {
+                                        candidate: `candidate:1 1 UDP 2113667327 10.25.20.10 54400 typ host generation 0 ufrag 4ZcD network-id 3 network-cost 900`,
+                                        sdpMLineIndex: 0,
+                                        sdpMid: '0'
+                                    }
+                                };
+                                console.log(`🎯 [VIEWER] Force-sending hardcoded VPN IP candidate: 10.25.20.10`);
+                                ws.send(JSON.stringify({
+                                    type: 'signal',
+                                    data: forcedCandidate
+                                }));
+                                console.log(`✅ [VIEWER] VPN candidate sent`);
+                            }, 100);
+                        }
+                    } catch (error) {
+                        console.error(`❌ [VIEWER] Failed to send signal:`, error);
                     }
                 });
                 
@@ -397,7 +407,13 @@
                 };
                 
                 // Signal the offer to the peer
-                peer.signal(data);
+                console.log(`📤 [VIEWER] About to signal offer to peer`);
+                try {
+                    peer.signal(data);
+                    console.log(`✅ [VIEWER] Offer signaled to peer successfully`);
+                } catch (error) {
+                    console.error(`❌ [VIEWER] Failed to signal offer to peer:`, error);
+                }
             } 
             else if (data.candidate && peer) {
                 console.log(`🧊 [VIEWER] Processing ICE candidate`);
