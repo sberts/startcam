@@ -414,6 +414,7 @@
                             return peer._pc.setLocalDescription(offer);
                         }).then(() => {
                             addDebugMessage('✅ Local description set');
+                            addDebugMessage('⏳ Waiting for answer...');
                         }).catch(err => {
                             addDebugMessage(`❌ Manual offer failed: ${err.message}`);
                         });
@@ -554,8 +555,10 @@
                 
                 peer._pc.onicecandidate = (event) => {
                     if (event.candidate) {
+                        addDebugMessage(`🧊 Local candidate: ${event.candidate.address}:${event.candidate.port}`);
                         console.log(`🧊 [STREAMER] ICE candidate (ignored - using forced IPs):`, event.candidate.address);
                     } else {
+                        addDebugMessage('✅ ICE gathering complete');
                         console.log(`✅ [STREAMER] ICE gathering complete`);
                     }
                 };
@@ -576,17 +579,24 @@
                     
                     if (message.type === 'signal' && peer) {
                         console.log(`📋 [STREAMER] Signal data type:`, message.data?.type);
-                        console.log(`📋 [STREAMER] Processing signal:`, message.data);
                         
                         if (message.data.type === 'answer') {
+                            addDebugMessage('📋 Got answer from viewer');
                             console.log(`📋 [STREAMER] Got answer! SDP length:`, message.data.sdp?.length);
                         } else if (message.data.candidate) {
+                            // Extract IP from candidate string
+                            const candidateString = message.data.candidate.candidate || message.data.candidate;
+                            const ipMatch = candidateString.match(/(\d+\.\d+\.\d+\.\d+)\s+(\d+)/);
+                            if (ipMatch) {
+                                addDebugMessage(`🎯 Remote candidate: ${ipMatch[1]}:${ipMatch[2]}`);
+                            }
                             console.log(`🧊 [STREAMER] Got ICE candidate:`, message.data.candidate);
                         }
                         
                         peer.signal(message.data);
                         console.log(`✅ [STREAMER] Signal processed by peer`);
                     } else if (!peer) {
+                        addDebugMessage('⚠️ No peer to handle signal');
                         console.log(`⚠️ [STREAMER] No peer object to handle signal`);
                     }
                 } catch (error) {

@@ -135,6 +135,16 @@
                     
                     if (message.type === 'signal') {
                         console.log(`📋 [VIEWER] Signal data type:`, message.data?.type);
+                        
+                        // Log IP addresses from ICE candidates
+                        if (message.data.candidate) {
+                            const candidateString = message.data.candidate.candidate || message.data.candidate;
+                            const ipMatch = candidateString.match(/(\d+\.\d+\.\d+\.\d+)\s+(\d+)/);
+                            if (ipMatch) {
+                                console.log(`🎯 [VIEWER] Remote candidate IP: ${ipMatch[1]}:${ipMatch[2]}`);
+                            }
+                        }
+                        
                         console.log(`📋 [VIEWER] Signal data:`, message.data);
                         handleSignal(message.data);
                     } else {
@@ -379,6 +389,7 @@
                 // Add ICE candidate debugging for viewer
                 peer._pc.onicecandidate = (event) => {
                     if (event.candidate) {
+                        console.log(`🧊 [VIEWER] Local candidate IP: ${event.candidate.address}:${event.candidate.port}`);
                         console.log(`🧊 [VIEWER] ICE candidate (ignored - using forced IPs):`, event.candidate.address);
                     } else {
                         console.log(`✅ [VIEWER] ICE gathering complete`);
