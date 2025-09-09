@@ -380,25 +380,7 @@
                         }));
                         addDebugMessage(`✅ Signal sent: ${data.type}`);
                         
-                        // After sending offer, inject forced candidate
-                        if (data.type === 'offer') {
-                            addDebugMessage('🎯 Injecting VPN candidate');
-                            setTimeout(() => {
-                                const forcedCandidate = {
-                                    type: 'candidate',
-                                    candidate: {
-                                        candidate: `candidate:1 1 UDP 2113667327 10.25.200.50 54400 typ host generation 0 ufrag 4ZcD network-id 3 network-cost 900`,
-                                        sdpMLineIndex: 0,
-                                        sdpMid: '0'
-                                    }
-                                };
-                                ws.send(JSON.stringify({
-                                    type: 'signal',
-                                    data: forcedCandidate
-                                }));
-                                addDebugMessage('🎯 VPN candidate sent');
-                            }, 100);
-                        }
+                        // Let natural ICE candidates be sent via onicecandidate handler
                     } catch (error) {
                         addDebugMessage(`❌ Signal failed: ${error.message}`);
                     }
@@ -558,27 +540,37 @@
                 peer._pc.onicecandidate = (event) => {
                     if (event.candidate) {
                         addDebugMessage(`🧊 Local candidate: ${event.candidate.address}:${event.candidate.port}`);
-                        
-                        // If we get a .local candidate, manually add a VPN IP candidate to the connection
-                        if (event.candidate.address && event.candidate.address.endsWith('.local')) {
-                            addDebugMessage(`🔧 Adding VPN IP candidate to replace .local`);
-                            
-                            // Create a new candidate with VPN IP
-                            const vpnCandidate = new RTCIceCandidate({
-                                candidate: `candidate:1 1 UDP 2113937151 10.25.200.50 ${event.candidate.port} typ host generation 0 ufrag ${event.candidate.usernameFragment || 'abcd'} network-cost 999`,
-                                sdpMLineIndex: event.candidate.sdpMLineIndex,
-                                sdpMid: event.candidate.sdpMid
-                            });
-                            
-                            // Add the VPN candidate to our own connection
-                            peer._pc.addIceCandidate(vpnCandidate).then(() => {
-                                addDebugMessage(`✅ VPN candidate added locally`);
-                            }).catch(err => {
-                                addDebugMessage(`❌ Failed to add VPN candidate: ${err.message}`);
-                            });
-                        }
-                        
                         console.log(`🧊 [STREAMER] ICE candidate:`, event.candidate.address);
+                        
+                        // Force replace any IP with routable VPN IP
+                        if (event.candidate.address && !event.candidate.address.endsWith('.local')) {
+                            addDebugMessage(`🔧 Replacing ${event.candidate.address} with VPN IP 10.25.200.50`);
+                            
+                            // Create candidate with VPN IP but keep original port and other details
+                            const vpnCandidate = event.candidate.candidate.replace(
+                                event.candidate.address,
+                                '10.25.200.50'
+                            );
+                            
+                            try {
+                                ws.send(JSON.stringify({
+                                    type: 'signal',
+                                    data: {
+                                        type: 'candidate',
+                                        candidate: {
+                                            candidate: vpnCandidate,
+                                            sdpMLineIndex: event.candidate.sdpMLineIndex,
+                                            sdpMid: event.candidate.sdpMid
+                                        }
+                                    }
+                                }));
+                                addDebugMessage(`✅ VPN IP candidate sent: 10.25.200.50:${event.candidate.port}`);
+                            } catch (error) {
+                                addDebugMessage(`❌ Failed to send VPN candidate: ${error.message}`);
+                            }
+                        } else if (event.candidate.address && event.candidate.address.endsWith('.local')) {
+                            addDebugMessage(`🚫 Skipping .local candidate`);
+                        }
                     } else {
                         addDebugMessage('✅ ICE gathering complete');
                         console.log(`✅ [STREAMER] ICE gathering complete`);

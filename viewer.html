@@ -205,26 +205,7 @@
                         }));
                         console.log(`✅ [VIEWER] Signal sent successfully: ${signalData.type}`);
                         
-                        // After sending answer, inject forced candidate
-                        if (signalData.type === 'answer') {
-                            console.log(`🎯 [VIEWER] Answer sent, now injecting VPN candidate`);
-                            setTimeout(() => {
-                                const forcedCandidate = {
-                                    type: 'candidate',
-                                    candidate: {
-                                        candidate: `candidate:1 1 UDP 2113667327 10.25.20.10 54400 typ host generation 0 ufrag 4ZcD network-id 3 network-cost 900`,
-                                        sdpMLineIndex: 0,
-                                        sdpMid: '0'
-                                    }
-                                };
-                                console.log(`🎯 [VIEWER] Force-sending hardcoded VPN IP candidate: 10.25.20.10`);
-                                ws.send(JSON.stringify({
-                                    type: 'signal',
-                                    data: forcedCandidate
-                                }));
-                                console.log(`✅ [VIEWER] VPN candidate sent`);
-                            }, 100);
-                        }
+                        // Let natural ICE candidates be sent via onicecandidate handler
                     } catch (error) {
                         console.error(`❌ [VIEWER] Failed to send signal:`, error);
                     }
@@ -402,7 +383,36 @@
                 peer._pc.onicecandidate = (event) => {
                     if (event.candidate) {
                         console.log(`🧊 [VIEWER] Local candidate IP: ${event.candidate.address}:${event.candidate.port}`);
-                        console.log(`🧊 [VIEWER] ICE candidate (ignored - using forced IPs):`, event.candidate.address);
+                        
+                        // Force replace any IP with routable VPN IP
+                        if (event.candidate.address && !event.candidate.address.endsWith('.local')) {
+                            console.log(`🔧 [VIEWER] Replacing ${event.candidate.address} with VPN IP 10.25.20.10`);
+                            
+                            // Create candidate with VPN IP but keep original port and other details
+                            const vpnCandidate = event.candidate.candidate.replace(
+                                event.candidate.address,
+                                '10.25.20.10'
+                            );
+                            
+                            try {
+                                ws.send(JSON.stringify({
+                                    type: 'signal',
+                                    data: {
+                                        type: 'candidate',
+                                        candidate: {
+                                            candidate: vpnCandidate,
+                                            sdpMLineIndex: event.candidate.sdpMLineIndex,
+                                            sdpMid: event.candidate.sdpMid
+                                        }
+                                    }
+                                }));
+                                console.log(`✅ [VIEWER] VPN IP candidate sent: 10.25.20.10:${event.candidate.port}`);
+                            } catch (error) {
+                                console.error(`❌ [VIEWER] Failed to send VPN candidate: ${error.message}`);
+                            }
+                        } else if (event.candidate.address && event.candidate.address.endsWith('.local')) {
+                            console.log(`🚫 [VIEWER] Skipping .local candidate`);
+                        }
                     } else {
                         console.log(`✅ [VIEWER] ICE gathering complete`);
                     }
