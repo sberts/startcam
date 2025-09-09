@@ -383,9 +383,12 @@
                             addDebugMessage('🎯 Injecting VPN candidate');
                             setTimeout(() => {
                                 const forcedCandidate = {
-                                    candidate: `candidate:1 1 UDP 2113667327 10.25.200.50 54400 typ host generation 0 ufrag 4ZcD network-id 3 network-cost 900`,
-                                    sdpMLineIndex: 0,
-                                    sdpMid: '0'
+                                    type: 'candidate',
+                                    candidate: {
+                                        candidate: `candidate:1 1 UDP 2113667327 10.25.200.50 54400 typ host generation 0 ufrag 4ZcD network-id 3 network-cost 900`,
+                                        sdpMLineIndex: 0,
+                                        sdpMid: '0'
+                                    }
                                 };
                                 ws.send(JSON.stringify({
                                     type: 'signal',

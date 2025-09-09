@@ -192,9 +192,12 @@
                     if (signalData.type === 'answer') {
                         setTimeout(() => {
                             const forcedCandidate = {
-                                candidate: `candidate:1 1 UDP 2113667327 10.25.20.10 54400 typ host generation 0 ufrag 4ZcD network-id 3 network-cost 900`,
-                                sdpMLineIndex: 0,
-                                sdpMid: '0'
+                                type: 'candidate',
+                                candidate: {
+                                    candidate: `candidate:1 1 UDP 2113667327 10.25.20.10 54400 typ host generation 0 ufrag 4ZcD network-id 3 network-cost 900`,
+                                    sdpMLineIndex: 0,
+                                    sdpMid: '0'
+                                }
                             };
                             console.log(`🎯 [VIEWER] Force-sending hardcoded VPN IP candidate: 10.25.20.10`);
                             ws.send(JSON.stringify({
