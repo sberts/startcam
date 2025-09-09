@@ -399,6 +399,26 @@
                     }
                 });
                 
+                addDebugMessage('📡 Signal handler attached');
+                
+                // Force offer creation if not automatic
+                setTimeout(() => {
+                    addDebugMessage('⏰ Checking for offer after 2s');
+                    if (peer && peer._pc && peer._pc.signalingState === 'stable') {
+                        addDebugMessage('🔨 Forcing offer creation');
+                        peer._pc.createOffer().then(offer => {
+                            addDebugMessage('✅ Manual offer created');
+                            return peer._pc.setLocalDescription(offer);
+                        }).then(() => {
+                            addDebugMessage('✅ Local description set');
+                        }).catch(err => {
+                            addDebugMessage(`❌ Manual offer failed: ${err.message}`);
+                        });
+                    } else {
+                        addDebugMessage(`🔍 Peer state: ${peer._pc?.signalingState || 'unknown'}`);
+                    }
+                }, 2000);
+                
                 // Add timeout to force signal if needed
                 setTimeout(() => {
                     console.log('⏰ [STREAMER] 5 second timeout - checking peer state');
