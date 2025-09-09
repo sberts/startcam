@@ -397,6 +397,20 @@
                     console.log(`🔗 [STREAMER] ICE connection state: ${peer._pc.iceConnectionState}`);
                     updateStatus(`ICE: ${peer._pc.iceConnectionState}`, 'info');
                     
+                    if (peer._pc.iceConnectionState === 'connected') {
+                        console.log(`✅ [STREAMER] ICE CONNECTED! Streaming to viewer.`);
+                        updateStatus('✅ ICE Connected - Streaming!', 'connected');
+                    } else if (peer._pc.iceConnectionState === 'completed') {
+                        console.log(`✅ [STREAMER] ICE COMPLETED! Stream fully established.`);
+                        updateStatus('✅ Stream established!', 'connected');
+                    } else if (peer._pc.iceConnectionState === 'failed') {
+                        console.log(`❌ [STREAMER] ICE FAILED! Cannot reach viewer.`);
+                        updateStatus('❌ ICE failed - Cannot reach viewer', 'error');
+                    } else if (peer._pc.iceConnectionState === 'checking') {
+                        console.log(`🔄 [STREAMER] ICE CHECKING... Trying to connect to viewer.`);
+                        updateStatus('🔄 Connecting to viewer...', 'info');
+                    }
+                    
                     // Check if we're connected but peer.on('connect') didn't fire
                     if (peer._pc.iceConnectionState === 'connected' || peer._pc.iceConnectionState === 'completed') {
                         console.log('✅ [STREAMER] ICE connected! Checking senders...');

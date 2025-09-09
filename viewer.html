@@ -326,11 +326,24 @@
                 // ICE connection debugging
                 peer._pc.oniceconnectionstatechange = () => {
                     console.log(`🔗 [VIEWER] ICE state: ${peer._pc.iceConnectionState}`);
+                    updateStatus(`ICE: ${peer._pc.iceConnectionState}`, 'info');
+                    
                     if (peer._pc.iceConnectionState === 'connected') {
-                        updateStatus('✅ Connected to streamer!', 'connected');
+                        console.log(`✅ [VIEWER] ICE CONNECTED! Media should flow now.`);
+                        updateStatus('✅ ICE Connected - Media flowing!', 'connected');
+                    } else if (peer._pc.iceConnectionState === 'completed') {
+                        console.log(`✅ [VIEWER] ICE COMPLETED! Connection fully established.`);
+                        updateStatus('✅ Connection established!', 'connected');
                     } else if (peer._pc.iceConnectionState === 'failed') {
-                        updateStatus('Connection failed', 'error');
+                        console.log(`❌ [VIEWER] ICE FAILED! Cannot reach streamer.`);
+                        updateStatus('❌ ICE failed - Cannot reach streamer', 'error');
                         connectBtn.disabled = false;
+                    } else if (peer._pc.iceConnectionState === 'disconnected') {
+                        console.log(`⚠️ [VIEWER] ICE DISCONNECTED! Connection lost.`);
+                        updateStatus('⚠️ Connection lost', 'error');
+                    } else if (peer._pc.iceConnectionState === 'checking') {
+                        console.log(`🔄 [VIEWER] ICE CHECKING... Trying to connect.`);
+                        updateStatus('🔄 Connecting to streamer...', 'info');
                     }
                 };
                 
