@@ -338,7 +338,8 @@
                 peer._pc.onicecandidate = (event) => {
                     if (event.candidate) {
                         const is10_25 = event.candidate.address?.startsWith('10.25.');
-                        console.log(`🧊 [VIEWER] ICE candidate${is10_25 ? ' ⭐ (10.25 network)' : ''}:`, {
+                        const isVPN = event.candidate.address === '10.25.200.51';
+                        console.log(`🧊 [VIEWER] ICE candidate${isVPN ? ' 🎯 (VPN IP)' : is10_25 ? ' ⭐ (10.25 network)' : ''}:`, {
                             type: event.candidate.type,
                             protocol: event.candidate.protocol,
                             address: event.candidate.address,
@@ -348,24 +349,27 @@
                             full: event.candidate.candidate
                         });
                         
-                        // Force ICE candidate exchange since SimplePeer's trickle is broken
-                        console.log(`🚀 [VIEWER] Force-sending ICE candidate since SimplePeer won't`);
-                        try {
-                            // Use the proper RTCIceCandidateInit format that SimplePeer expects
-                            ws.send(JSON.stringify({
-                                type: 'signal',
-                                data: {
-                                    type: 'candidate', 
-                                    candidate: {
-                                        candidate: event.candidate.candidate,
-                                        sdpMLineIndex: event.candidate.sdpMLineIndex,
-                                        sdpMid: event.candidate.sdpMid
+                        // Only send VPN IP or 10.25 network candidates for testing
+                        if (isVPN || is10_25) {
+                            console.log(`🚀 [VIEWER] Sending ${isVPN ? 'VPN' : '10.25'} ICE candidate`);
+                            try {
+                                ws.send(JSON.stringify({
+                                    type: 'signal',
+                                    data: {
+                                        type: 'candidate', 
+                                        candidate: {
+                                            candidate: event.candidate.candidate,
+                                            sdpMLineIndex: event.candidate.sdpMLineIndex,
+                                            sdpMid: event.candidate.sdpMid
+                                        }
                                     }
-                                }
-                            }));
-                            console.log(`✅ [VIEWER] ICE candidate force-sent`);
-                        } catch (error) {
-                            console.error(`❌ [VIEWER] Failed to force-send ICE candidate:`, error);
+                                }));
+                                console.log(`✅ [VIEWER] ICE candidate sent`);
+                            } catch (error) {
+                                console.error(`❌ [VIEWER] Failed to send ICE candidate:`, error);
+                            }
+                        } else {
+                            console.log(`🚫 [VIEWER] Filtered out candidate from: ${event.candidate.address}`);
                         }
                     } else {
                         console.log(`✅ [VIEWER] ICE gathering complete`);
