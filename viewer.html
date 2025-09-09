@@ -182,10 +182,12 @@
                     initiator: false,
                     trickle: true, // Enable trickle to get signals
                     config: {
-                        // Force specific VPN IPs only
-                        iceServers: [],
+                        // Add STUN to force server reflexive candidates with actual IPs
+                        iceServers: [
+                            { urls: 'stun:stun.l.google.com:19302' }
+                        ],
                         iceTransportPolicy: 'all',
-                        iceCandidatePoolSize: 0,
+                        iceCandidatePoolSize: 10,
                         rtcpMuxPolicy: 'require',
                         bundlePolicy: 'max-bundle'
                     }

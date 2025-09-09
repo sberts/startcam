@@ -352,10 +352,12 @@
                         trickle: true, // Enable trickle to get signals
                         stream: localStream,
                         config: {
-                            // Force specific VPN IPs only
-                            iceServers: [],
+                            // Add STUN to force server reflexive candidates with actual IPs
+                            iceServers: [
+                                { urls: 'stun:stun.l.google.com:19302' }
+                            ],
                             iceTransportPolicy: 'all',
-                            iceCandidatePoolSize: 0,
+                            iceCandidatePoolSize: 10,
                             rtcpMuxPolicy: 'require',
                             bundlePolicy: 'max-bundle'
                         }
@@ -556,7 +558,27 @@
                 peer._pc.onicecandidate = (event) => {
                     if (event.candidate) {
                         addDebugMessage(`🧊 Local candidate: ${event.candidate.address}:${event.candidate.port}`);
-                        console.log(`🧊 [STREAMER] ICE candidate (ignored - using forced IPs):`, event.candidate.address);
+                        
+                        // If we get a .local candidate, manually add a VPN IP candidate to the connection
+                        if (event.candidate.address && event.candidate.address.endsWith('.local')) {
+                            addDebugMessage(`🔧 Adding VPN IP candidate to replace .local`);
+                            
+                            // Create a new candidate with VPN IP
+                            const vpnCandidate = new RTCIceCandidate({
+                                candidate: `candidate:1 1 UDP 2113937151 10.25.200.50 ${event.candidate.port} typ host generation 0 ufrag ${event.candidate.usernameFragment || 'abcd'} network-cost 999`,
+                                sdpMLineIndex: event.candidate.sdpMLineIndex,
+                                sdpMid: event.candidate.sdpMid
+                            });
+                            
+                            // Add the VPN candidate to our own connection
+                            peer._pc.addIceCandidate(vpnCandidate).then(() => {
+                                addDebugMessage(`✅ VPN candidate added locally`);
+                            }).catch(err => {
+                                addDebugMessage(`❌ Failed to add VPN candidate: ${err.message}`);
+                            });
+                        }
+                        
+                        console.log(`🧊 [STREAMER] ICE candidate:`, event.candidate.address);
                     } else {
                         addDebugMessage('✅ ICE gathering complete');
                         console.log(`✅ [STREAMER] ICE gathering complete`);
