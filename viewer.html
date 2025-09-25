@@ -199,6 +199,12 @@
             ws.onopen = () => {
                 console.log('✅ [VIEWER] WebSocket connected');
                 updateStatus('Connected to server, waiting for offer...', 'info');
+                
+                // Request offer from any connected streamer
+                console.log('📋 [VIEWER] Requesting offer from connected streamers...');
+                ws.send(JSON.stringify({
+                    type: 'request_offer'
+                }));
             };
             
             ws.onmessage = async (event) => {

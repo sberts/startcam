@@ -455,6 +455,32 @@
                 }
                 
                 
+                setupPeerEventHandlers();
+                
+                addDebugMessage('📡 Signal handler attached');
+                
+                // Force offer creation if not automatic
+                setTimeout(() => {
+                    addDebugMessage('⏰ Checking for offer after 2s');
+                    if (peer && peer._pc && peer._pc.signalingState === 'stable') {
+                        addDebugMessage('🔨 Forcing offer creation');
+                        peer._pc.createOffer().then(offer => {
+                            addDebugMessage('✅ Manual offer created');
+                            return peer._pc.setLocalDescription(offer);
+                        }).then(() => {
+                            addDebugMessage('✅ Local description set');
+                            addDebugMessage('⏳ Waiting for answer...');
+                        }).catch(err => {
+                            addDebugMessage(`❌ Manual offer failed: ${err.message}`);
+                        });
+                    } else {
+                        addDebugMessage(`🔍 Peer state: ${peer._pc?.signalingState || 'unknown'}`);
+                    }
+                }, 2000);
+            };
+            
+            // Define peer event handlers function
+            function setupPeerEventHandlers() {
                 peer.on('signal', (data) => {
                     addDebugMessage(`📤 Sending: ${data.type || 'unknown'}`);
                     
@@ -665,7 +691,7 @@
                         console.log(`✅ [STREAMER] ICE gathering complete`);
                     }
                 };
-            };
+            }
             
             ws.onmessage = async (event) => {
                 try {
@@ -680,7 +706,51 @@
                     console.log(`📥 [STREAMER] Received message type:`, message.type);
                     console.log(`📥 [STREAMER] Full message:`, message);
                     
-                    if (message.type === 'signal' && peer) {
+                    if (message.type === 'request_offer') {
+                        console.log(`📋 [STREAMER] Viewer requesting offer, creating new peer connection...`);
+                        
+                        // Destroy existing peer if any
+                        if (peer && !peer.destroyed) {
+                            console.log(`🔄 [STREAMER] Destroying existing peer for new connection`);
+                            peer.destroy();
+                        }
+                        
+                        // Create new peer connection for the requesting viewer
+                        try {
+                            peer = new SimplePeer({
+                                initiator: true,
+                                trickle: true,
+                                stream: processedStream || localStream,
+                                config: {
+                                    iceServers: [
+                                        { urls: 'stun:stun.l.google.com:19302' }
+                                    ],
+                                    iceTransportPolicy: 'all',
+                                    iceCandidatePoolSize: 10,
+                                    rtcpMuxPolicy: 'require',
+                                    bundlePolicy: 'max-bundle'
+                                }
+                            });
+                            
+                            // Set up all the peer event handlers (reusing existing code)
+                            setupPeerEventHandlers();
+                            
+                            // Add timeout to force signal if needed (same as original connection)
+                            setTimeout(() => {
+                                console.log('⏰ [STREAMER] 5 second timeout - checking peer state for new connection');
+                                if (peer && !peer.destroyed) {
+                                    console.log('🔍 [STREAMER] Peer destroyed?', peer.destroyed);
+                                    console.log('🔍 [STREAMER] Peer initiator?', peer.initiator);
+                                    console.log('🔍 [STREAMER] ICE gathering state:', peer._pc.iceGatheringState);
+                                    console.log('🔍 [STREAMER] Signaling state:', peer._pc.signalingState);
+                                }
+                            }, 5000);
+                            
+                        } catch (error) {
+                            addDebugMessage(`❌ New peer creation failed: ${error.message}`);
+                            console.error(`❌ [STREAMER] Failed to create new peer:`, error);
+                        }
+                    } else if (message.type === 'signal' && peer) {
                         console.log(`📋 [STREAMER] Signal data type:`, message.data?.type);
                         
                         if (message.data.type === 'answer') {

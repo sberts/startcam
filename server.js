@@ -84,7 +84,9 @@ wss.on('connection', (ws, req) => {
       const data = JSON.parse(message);
       let logDetails = `${data.type}`;
       
-      if (data.type === 'signal' && data.data) {
+      if (data.type === 'request_offer') {
+        logDetails += ' (viewer requesting offer from streamers)';
+      } else if (data.type === 'signal' && data.data) {
         if (data.data.type === 'offer') {
           logDetails += ` (offer - ${data.data.sdp ? 'with SDP' : 'no SDP'})`;
         } else if (data.data.type === 'answer') {
