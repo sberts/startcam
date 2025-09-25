@@ -528,7 +528,6 @@
                     });
                     
                     // Verify tracks are still live
-                    const activeStream = processedStream || localStream;
                     activeStream.getTracks().forEach((track, index) => {
                         console.log(`🎬 [STREAMER] Active stream track ${index} status:`, {
                             kind: track.kind,
@@ -580,13 +579,13 @@
                         });
                         
                         // Check if tracks are still good
-                        const activeStream = processedStream || localStream;
+                        const currentActiveStream = processedStream || localStream;
                         console.log('🎬 [STREAMER] Active stream status at ICE connect:', {
-                            active: activeStream.active,
-                            tracks: activeStream.getTracks().length,
+                            active: currentActiveStream.active,
+                            tracks: currentActiveStream.getTracks().length,
                             usingProcessedAudio: !!processedStream
                         });
-                        activeStream.getTracks().forEach((track, index) => {
+                        currentActiveStream.getTracks().forEach((track, index) => {
                             console.log(`🎵 [STREAMER] Track ${index}:`, {
                                 kind: track.kind,
                                 enabled: track.enabled,
