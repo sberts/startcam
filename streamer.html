@@ -65,6 +65,44 @@
             background: #d1ecf1;
             color: #0c5460;
         }
+        
+        .volume-control {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin: 10px 0;
+            color: white;
+        }
+        
+        .volume-slider {
+            width: 150px;
+            height: 6px;
+            background: #333;
+            border-radius: 3px;
+            outline: none;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+        
+        .volume-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            background: #007bff;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        
+        .volume-slider::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            background: #007bff;
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+        }
     </style>
 </head>
 <body>
@@ -77,17 +115,26 @@
         <button id="startBtn" onclick="startStream()">Start Camera</button>
         <button id="switchCameraBtn" onclick="switchCamera()" disabled style="display: none;">Switch Camera</button>
         <button id="muteBtn" onclick="toggleMute()" disabled>🎤 Mute</button>
+        <div class="volume-control" id="volumeControl" style="display: none;">
+            <span>🔊</span>
+            <input type="range" id="volumeSlider" class="volume-slider" min="0" max="200" value="100" oninput="adjustVolume(this.value)">
+            <span id="volumeValue">100%</span>
+        </div>
         <button id="connectBtn" onclick="connectToPeer()" disabled>Connect to Viewer</button>
     </div>
 
     <script src="https://unpkg.com/simple-peer@9.11.1/simplepeer.min.js"></script>
     <script>
         let localStream = null;
+        let processedStream = null; // Stream with audio processing applied
+        let audioContext = null;
+        let gainNode = null;
         let peer = null;
         let ws = null;
         let currentCamera = 'user'; // 'user' for front, 'environment' for rear
         let availableCameras = [];
         let isMuted = false;
+        let currentVolume = 100; // 0-200%
         
         const localVideo = document.getElementById('localVideo');
         const status = document.getElementById('status');
@@ -95,6 +142,9 @@
         const switchCameraBtn = document.getElementById('switchCameraBtn');
         const muteBtn = document.getElementById('muteBtn');
         const connectBtn = document.getElementById('connectBtn');
+        const volumeControl = document.getElementById('volumeControl');
+        const volumeSlider = document.getElementById('volumeSlider');
+        const volumeValue = document.getElementById('volumeValue');
         
         function updateStatus(message, type = 'info') {
             status.textContent = message;
@@ -179,6 +229,9 @@
                     });
                 });
                 
+                // Initialize audio processing
+                processedStream = initAudioProcessing();
+                
                 localVideo.srcObject = localStream;
                 console.log('🎥 [STREAMER] Set video srcObject');
                 
@@ -206,6 +259,12 @@
                 switchCameraBtn.disabled = false;
                 muteBtn.disabled = false;
                 connectBtn.disabled = false;
+                
+                // Show volume control
+                if (processedStream && processedStream.getAudioTracks().length > 0) {
+                    volumeControl.style.display = 'flex';
+                    console.log('🔊 [STREAMER] Volume control enabled');
+                }
                 
                 updateStatus('Camera started - Ready to connect', 'connected');
             } catch (err) {
@@ -242,6 +301,10 @@
                 });
                 
                 console.log('📱 [STREAMER] Camera switched successfully');
+                
+                // Reinitialize audio processing with new stream
+                processedStream = initAudioProcessing();
+                
                 localVideo.srcObject = localStream;
                 
                 // Restore mute state after camera switch
@@ -249,6 +312,12 @@
                     localStream.getAudioTracks().forEach(track => {
                         track.enabled = false;
                     });
+                    // Also mute processed stream if it exists
+                    if (processedStream) {
+                        processedStream.getAudioTracks().forEach(track => {
+                            track.enabled = false;
+                        });
+                    }
                     console.log('🎤 [STREAMER] Restored muted state after camera switch');
                 }
                 
@@ -256,12 +325,16 @@
                 if (peer && !peer.destroyed) {
                     console.log('📱 [STREAMER] Updating peer stream after camera switch');
                     
-                    // Remove old tracks
+                    const streamToUse = processedStream || localStream;
                     const senders = peer._pc.getSenders();
+                    
                     for (const sender of senders) {
                         if (sender.track && sender.track.kind === 'video') {
-                            await sender.replaceTrack(localStream.getVideoTracks()[0]);
+                            await sender.replaceTrack(streamToUse.getVideoTracks()[0]);
                             console.log('📱 [STREAMER] Replaced video track in peer connection');
+                        } else if (sender.track && sender.track.kind === 'audio') {
+                            await sender.replaceTrack(streamToUse.getAudioTracks()[0]);
+                            console.log('🎵 [STREAMER] Replaced audio track in peer connection');
                         }
                     }
                 }
@@ -280,7 +353,8 @@
         function toggleMute() {
             if (!localStream) return;
             
-            const audioTracks = localStream.getAudioTracks();
+            const streamToMute = processedStream || localStream;
+            const audioTracks = streamToMute.getAudioTracks();
             if (audioTracks.length === 0) {
                 console.warn('⚠️ [STREAMER] No audio tracks to mute');
                 return;
@@ -288,10 +362,15 @@
             
             isMuted = !isMuted;
             
-            // Toggle all audio tracks
-            audioTracks.forEach(track => {
+            // Toggle all audio tracks (both original and processed)
+            localStream.getAudioTracks().forEach(track => {
                 track.enabled = !isMuted;
             });
+            if (processedStream) {
+                processedStream.getAudioTracks().forEach(track => {
+                    track.enabled = !isMuted;
+                });
+            }
             
             // Update button text and visual feedback
             muteBtn.textContent = isMuted ? '🔇 Unmute' : '🎤 Mute';
@@ -320,6 +399,10 @@
                 updateStatus('Start camera first', 'error');
                 return;
             }
+            
+            // Use processed stream if available, otherwise fallback to original
+            const streamToUse = processedStream || localStream;
+            addDebugMessage(`🎵 Using ${processedStream ? 'processed' : 'original'} stream`);
             
             addDebugMessage('✅ localStream exists');
             
@@ -350,7 +433,7 @@
                     peer = new SimplePeer({
                         initiator: true,
                         trickle: true, // Enable trickle to get signals
-                        stream: localStream,
+                        stream: processedStream || localStream,
                         config: {
                             // Add STUN to force server reflexive candidates with actual IPs
                             iceServers: [
@@ -422,10 +505,12 @@
                     connectBtn.disabled = true;
                     
                     // Comprehensive WebRTC sender verification
+                    const activeStream = processedStream || localStream;
                     console.log('🔍 [STREAMER] Verifying stream after connect:', {
-                        streamId: localStream?.id,
-                        tracks: localStream?.getTracks().length,
-                        peerStreams: peer._pc.getLocalStreams ? peer._pc.getLocalStreams().length : 'N/A'
+                        streamId: activeStream?.id,
+                        tracks: activeStream?.getTracks().length,
+                        peerStreams: peer._pc.getLocalStreams ? peer._pc.getLocalStreams().length : 'N/A',
+                        usingProcessedAudio: !!processedStream
                     });
                     
                     // Check WebRTC senders
@@ -441,8 +526,9 @@
                     });
                     
                     // Verify tracks are still live
-                    localStream.getTracks().forEach((track, index) => {
-                        console.log(`🎬 [STREAMER] Local track ${index} status:`, {
+                    const activeStream = processedStream || localStream;
+                    activeStream.getTracks().forEach((track, index) => {
+                        console.log(`🎬 [STREAMER] Active stream track ${index} status:`, {
                             kind: track.kind,
                             enabled: track.enabled,
                             readyState: track.readyState,
@@ -492,11 +578,13 @@
                         });
                         
                         // Check if tracks are still good
-                        console.log('🎬 [STREAMER] Local stream status at ICE connect:', {
-                            active: localStream.active,
-                            tracks: localStream.getTracks().length
+                        const activeStream = processedStream || localStream;
+                        console.log('🎬 [STREAMER] Active stream status at ICE connect:', {
+                            active: activeStream.active,
+                            tracks: activeStream.getTracks().length,
+                            usingProcessedAudio: !!processedStream
                         });
-                        localStream.getTracks().forEach((track, index) => {
+                        activeStream.getTracks().forEach((track, index) => {
                             console.log(`🎵 [STREAMER] Track ${index}:`, {
                                 kind: track.kind,
                                 enabled: track.enabled,
@@ -629,6 +717,71 @@
             };
         }
         
+        // Audio processing functions
+        function initAudioProcessing() {
+            if (!localStream) return null;
+            
+            try {
+                // Create audio context if it doesn't exist
+                if (!audioContext) {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    console.log('🎵 [STREAMER] Created AudioContext');
+                }
+                
+                // Get audio tracks
+                const audioTracks = localStream.getAudioTracks();
+                if (audioTracks.length === 0) {
+                    console.warn('⚠️ [STREAMER] No audio tracks found');
+                    return localStream;
+                }
+                
+                // Create audio processing chain
+                const source = audioContext.createMediaStreamSource(localStream);
+                gainNode = audioContext.createGain();
+                const destination = audioContext.createMediaStreamDestination();
+                
+                // Connect: microphone → gainNode → destination
+                source.connect(gainNode);
+                gainNode.connect(destination);
+                
+                // Set initial volume (100% = 1.0)
+                gainNode.gain.value = currentVolume / 100;
+                
+                // Create new stream with processed audio + original video
+                const videoTracks = localStream.getVideoTracks();
+                const newStream = new MediaStream();
+                
+                // Add video tracks from original stream
+                videoTracks.forEach(track => newStream.addTrack(track));
+                
+                // Add processed audio tracks
+                destination.stream.getAudioTracks().forEach(track => newStream.addTrack(track));
+                
+                console.log('🎵 [STREAMER] Audio processing initialized:', {
+                    originalAudioTracks: audioTracks.length,
+                    processedAudioTracks: destination.stream.getAudioTracks().length,
+                    videoTracks: videoTracks.length,
+                    totalNewTracks: newStream.getTracks().length
+                });
+                
+                return newStream;
+            } catch (error) {
+                console.error('❌ [STREAMER] Audio processing failed:', error);
+                return localStream; // Fallback to original stream
+            }
+        }
+        
+        function adjustVolume(value) {
+            currentVolume = parseInt(value);
+            volumeValue.textContent = currentVolume + '%';
+            
+            if (gainNode) {
+                // Convert percentage to gain value (0-200% = 0.0-2.0)
+                gainNode.gain.value = currentVolume / 100;
+                console.log('🔊 [STREAMER] Volume adjusted to:', currentVolume + '%', 'gain:', gainNode.gain.value);
+            }
+        }
+        
         // Initialize camera detection on page load
         window.addEventListener('load', () => {
             detectCameras();
@@ -637,6 +790,12 @@
         window.addEventListener('beforeunload', () => {
             if (localStream) {
                 localStream.getTracks().forEach(track => track.stop());
+            }
+            if (processedStream) {
+                processedStream.getTracks().forEach(track => track.stop());
+            }
+            if (audioContext && audioContext.state !== 'closed') {
+                audioContext.close();
             }
             if (peer) {
                 peer.destroy();
