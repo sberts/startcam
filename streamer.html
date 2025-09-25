@@ -229,8 +229,16 @@
                     });
                 });
                 
-                // Initialize audio processing
-                processedStream = initAudioProcessing();
+                // Initialize audio processing (delay to avoid blocking camera)
+                setTimeout(() => {
+                    processedStream = initAudioProcessing();
+                    
+                    // Show volume control after audio processing is ready
+                    if (processedStream && processedStream.getAudioTracks().length > 0) {
+                        volumeControl.style.display = 'flex';
+                        console.log('🔊 [STREAMER] Volume control enabled');
+                    }
+                }, 500);
                 
                 localVideo.srcObject = localStream;
                 console.log('🎥 [STREAMER] Set video srcObject');
@@ -259,12 +267,6 @@
                 switchCameraBtn.disabled = false;
                 muteBtn.disabled = false;
                 connectBtn.disabled = false;
-                
-                // Show volume control
-                if (processedStream && processedStream.getAudioTracks().length > 0) {
-                    volumeControl.style.display = 'flex';
-                    console.log('🔊 [STREAMER] Volume control enabled');
-                }
                 
                 updateStatus('Camera started - Ready to connect', 'connected');
             } catch (err) {
@@ -722,10 +724,19 @@
             if (!localStream) return null;
             
             try {
-                // Create audio context if it doesn't exist
+                // Create audio context if it doesn't exist (with user interaction check)
                 if (!audioContext) {
                     audioContext = new (window.AudioContext || window.webkitAudioContext)();
                     console.log('🎵 [STREAMER] Created AudioContext');
+                    
+                    // Resume audio context if suspended (required on mobile)
+                    if (audioContext.state === 'suspended') {
+                        audioContext.resume().then(() => {
+                            console.log('🎵 [STREAMER] AudioContext resumed');
+                        }).catch(err => {
+                            console.warn('⚠️ [STREAMER] Failed to resume AudioContext:', err);
+                        });
+                    }
                 }
                 
                 // Get audio tracks
