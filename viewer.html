@@ -272,10 +272,8 @@
                     initiator: false,
                     trickle: true, // Enable trickle to get signals
                     config: {
-                        // Add STUN to force server reflexive candidates with actual IPs
-                        iceServers: [
-                            { urls: 'stun:stun.l.google.com:19302' }
-                        ],
+                        // No STUN servers - use host candidates only
+                        iceServers: [],
                         iceTransportPolicy: 'all',
                         iceCandidatePoolSize: 10,
                         rtcpMuxPolicy: 'require',
@@ -479,12 +477,14 @@
                     }
                 };
                 
-                // Add ICE candidate debugging for viewer
+                // Add ICE candidate debugging for viewer - send only one candidate
+                let vpnCandidateSent = false;
+                
                 peer._pc.onicecandidate = (event) => {
-                    if (event.candidate) {
+                    if (event.candidate && !vpnCandidateSent) {
                         console.log(`🧊 [VIEWER] Local candidate IP: ${event.candidate.address}:${event.candidate.port}`);
                         
-                        // Force replace any IP with routable VPN IP
+                        // Send only one candidate with VPN IP
                         if (event.candidate.address && !event.candidate.address.endsWith('.local')) {
                             console.log(`🔧 [VIEWER] Replacing ${event.candidate.address} with VPN IP 10.25.20.10`);
                             
@@ -506,13 +506,16 @@
                                         }
                                     }
                                 }));
-                                console.log(`✅ [VIEWER] VPN IP candidate sent: 10.25.20.10:${event.candidate.port}`);
+                                console.log(`✅ [VIEWER] Single VPN IP candidate sent: 10.25.20.10:${event.candidate.port}`);
+                                vpnCandidateSent = true; // Only send one candidate
                             } catch (error) {
                                 console.error(`❌ [VIEWER] Failed to send VPN candidate: ${error.message}`);
                             }
                         } else if (event.candidate.address && event.candidate.address.endsWith('.local')) {
                             console.log(`🚫 [VIEWER] Skipping .local candidate`);
                         }
+                    } else if (event.candidate && vpnCandidateSent) {
+                        console.log(`🚫 [VIEWER] Ignoring additional candidate: ${event.candidate.address}`);
                     } else {
                         console.log(`✅ [VIEWER] ICE gathering complete`);
                     }
