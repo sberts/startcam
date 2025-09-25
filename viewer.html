@@ -113,6 +113,7 @@
         let autoFullscreen = true;
         let reconnectTimer = null;
         let reconnectCountdown = 0;
+        let isConnecting = false;
         
         const remoteVideo = document.getElementById('remoteVideo');
         const status = document.getElementById('status');
@@ -165,14 +166,28 @@
         }
         
         function connect() {
+            // Prevent multiple simultaneous connection attempts
+            if (isConnecting) {
+                console.log('🚫 [VIEWER] Connection already in progress, ignoring');
+                return;
+            }
+            
+            isConnecting = true;
+            
             // Cancel any pending reconnect countdown
             cancelReconnectCountdown();
             
             updateStatus('Connecting...', 'info');
             
             // Clean up existing connections
-            if (peer) peer.destroy();
-            if (ws) ws.close();
+            if (peer) {
+                peer.destroy();
+                peer = null;
+            }
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
             
             connectBtn.disabled = true;
             controls.style.display = 'none';
@@ -182,6 +197,7 @@
             ws = new WebSocket(`${protocol}//${window.location.host}`);
             
             ws.onopen = () => {
+                console.log('✅ [VIEWER] WebSocket connected');
                 updateStatus('Connected to server, waiting for offer...', 'info');
             };
             
@@ -221,6 +237,7 @@
             
             ws.onerror = (error) => {
                 console.error(`❌ [VIEWER] WebSocket error:`, error);
+                isConnecting = false;
                 connectBtn.disabled = false;
                 controls.style.display = 'block';
                 startReconnectCountdown();
@@ -228,6 +245,7 @@
             
             ws.onclose = () => {
                 console.log(`🔌 [VIEWER] WebSocket closed`);
+                isConnecting = false;
                 connectBtn.disabled = false;
                 controls.style.display = 'block';
                 startReconnectCountdown();
@@ -280,6 +298,7 @@
                 
                 peer.on('stream', (stream) => {
                     console.log(`🎥 [VIEWER] Received stream!`, stream);
+                    isConnecting = false; // Mark connection as complete
                     cancelReconnectCountdown(); // Cancel any pending reconnect
                     console.log(`🎥 [VIEWER] Stream details:`, {
                         id: stream.id,
@@ -402,6 +421,7 @@
                 
                 peer.on('connect', () => {
                     console.log(`🤝 [VIEWER] Peer connected!`);
+                    isConnecting = false; // Mark connection as complete
                     cancelReconnectCountdown(); // Cancel any pending reconnect
                     updateStatus('✅ Connected to streamer!', 'connected');
                     
@@ -418,6 +438,7 @@
                 
                 peer.on('error', (err) => {
                     console.error(`❌ [VIEWER] Peer error:`, err);
+                    isConnecting = false;
                     connectBtn.disabled = false;
                     controls.style.display = 'block';
                     startReconnectCountdown();
@@ -436,11 +457,13 @@
                         updateStatus('✅ Connection established!', 'connected');
                     } else if (peer._pc.iceConnectionState === 'failed') {
                         console.log(`❌ [VIEWER] ICE FAILED! Cannot reach streamer.`);
+                        isConnecting = false;
                         connectBtn.disabled = false;
                         controls.style.display = 'block';
                         startReconnectCountdown();
                     } else if (peer._pc.iceConnectionState === 'disconnected') {
                         console.log(`⚠️ [VIEWER] ICE DISCONNECTED! Connection lost.`);
+                        isConnecting = false;
                         connectBtn.disabled = false;
                         controls.style.display = 'block';
                         startReconnectCountdown();
