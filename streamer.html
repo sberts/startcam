@@ -110,6 +110,7 @@
     <div id="status" class="status info">Ready to start streaming</div>
     
     <video id="localVideo" autoplay muted playsinline></video>
+    <audio id="remoteAudio" autoplay></audio>
     
     <div>
         <button id="startBtn" onclick="startStream()">Start Camera</button>
@@ -120,6 +121,7 @@
             <input type="range" id="volumeSlider" class="volume-slider" min="0" max="200" value="100" oninput="adjustVolume(this.value)">
             <span id="volumeValue">100%</span>
         </div>
+        <button id="remoteAudioBtn" onclick="toggleRemoteAudio()" disabled style="display: none;">🔇 Remote Mute</button>
         <button id="connectBtn" onclick="connectToPeer()" disabled>Connect to Viewer</button>
     </div>
 
@@ -145,6 +147,8 @@
         const volumeControl = document.getElementById('volumeControl');
         const volumeSlider = document.getElementById('volumeSlider');
         const volumeValue = document.getElementById('volumeValue');
+        const remoteAudio = document.getElementById('remoteAudio');
+        const remoteAudioBtn = document.getElementById('remoteAudioBtn');
         
         function updateStatus(message, type = 'info') {
             status.textContent = message;
@@ -498,6 +502,40 @@
                 });
                 
                 addDebugMessage('📡 Signal handler attached');
+                
+                // Handle incoming stream from viewer
+                peer.on('stream', (stream) => {
+                    console.log('🎵 [STREAMER] Received audio stream from viewer!', stream);
+                    addDebugMessage('🎵 Got viewer audio stream');
+                    
+                    // Play viewer's audio
+                    remoteAudio.srcObject = stream;
+                    console.log('🔊 [STREAMER] Set remote audio source');
+                    
+                    // Show remote audio control if audio tracks exist
+                    if (stream.getAudioTracks().length > 0) {
+                        remoteAudioBtn.style.display = 'inline-block';
+                        remoteAudioBtn.disabled = false;
+                        console.log('🔊 [STREAMER] Remote audio control enabled');
+                    }
+                    
+                    // Log stream details
+                    console.log('🎵 [STREAMER] Remote stream details:', {
+                        id: stream.id,
+                        audioTracks: stream.getAudioTracks().length,
+                        videoTracks: stream.getVideoTracks().length,
+                        active: stream.active
+                    });
+                    
+                    stream.getTracks().forEach((track, index) => {
+                        console.log(`🎵 [STREAMER] Remote track ${index}:`, {
+                            kind: track.kind,
+                            enabled: track.enabled,
+                            readyState: track.readyState,
+                            label: track.label
+                        });
+                    });
+                });
                 
                 // Force offer creation if not automatic
                 setTimeout(() => {
@@ -865,6 +903,19 @@
                 gainNode.gain.value = currentVolume / 100;
                 console.log('🔊 [STREAMER] Volume adjusted to:', currentVolume + '%', 'gain:', gainNode.gain.value);
             }
+        }
+        
+        // Toggle remote audio from viewer
+        function toggleRemoteAudio() {
+            if (!remoteAudio.srcObject) return;
+            
+            remoteAudio.muted = !remoteAudio.muted;
+            
+            // Update button text
+            remoteAudioBtn.textContent = remoteAudio.muted ? '🔈 Unmute Remote' : '🔇 Remote Mute';
+            remoteAudioBtn.style.backgroundColor = remoteAudio.muted ? '#dc3545' : '#007bff';
+            
+            console.log(`🔊 [STREAMER] Remote audio ${remoteAudio.muted ? 'muted' : 'unmuted'}`);
         }
         
         // Initialize camera detection on page load

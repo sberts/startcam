@@ -114,6 +114,7 @@
         let reconnectTimer = null;
         let reconnectCountdown = 0;
         let isConnecting = false;
+        let localStream = null; // For viewer's microphone
         
         const remoteVideo = document.getElementById('remoteVideo');
         const status = document.getElementById('status');
@@ -165,7 +166,7 @@
             }
         }
         
-        function connect() {
+        async function connect() {
             // Prevent multiple simultaneous connection attempts
             if (isConnecting) {
                 console.log('🚫 [VIEWER] Connection already in progress, ignoring');
@@ -173,6 +174,18 @@
             }
             
             isConnecting = true;
+            
+            // Get microphone access for two-way audio
+            if (!localStream) {
+                try {
+                    console.log('🎤 [VIEWER] Requesting microphone access...');
+                    localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    console.log('🎤 [VIEWER] Microphone access granted');
+                } catch (error) {
+                    console.warn('⚠️ [VIEWER] Microphone access denied:', error);
+                    // Continue without microphone - video-only mode
+                }
+            }
             
             // Cancel any pending reconnect countdown
             cancelReconnectCountdown();
@@ -271,6 +284,7 @@
                 peer = new SimplePeer({
                     initiator: false,
                     trickle: true, // Enable trickle to get signals
+                    stream: localStream, // Add viewer's microphone stream
                     config: {
                         // No STUN servers - use host candidates only
                         iceServers: [],
