@@ -110,7 +110,7 @@
     <div id="status" class="status info">Ready to start streaming</div>
     
     <video id="localVideo" autoplay muted playsinline></video>
-    <audio id="remoteAudio" autoplay playsinline webkit-playsinline></audio>
+    <audio id="remoteAudio" autoplay playsinline webkit-playsinline controls volume="1.0"></audio>
     
     <div>
         <button id="startBtn" onclick="startStream()">Start Camera</button>
@@ -239,8 +239,14 @@
                     });
                 });
                 
-                // Initialize audio processing (delay to avoid blocking camera)
+                // Initialize audio processing unless it conflicts with iOS Chrome Bluetooth routing
                 setTimeout(() => {
+                    if (isIOSChrome) {
+                        console.log('🎧 [STREAMER] Skipping audio processing on iOS Chrome to keep AirPods routing');
+                        processedStream = null;
+                        return;
+                    }
+
                     processedStream = initAudioProcessing();
                     
                     // Show volume control after audio processing is ready
@@ -314,8 +320,13 @@
                 
                 console.log('📱 [STREAMER] Camera switched successfully');
                 
-                // Reinitialize audio processing with new stream
-                processedStream = initAudioProcessing();
+                // Reinitialize audio processing with new stream when supported
+                if (isIOSChrome) {
+                    console.log('🎧 [STREAMER] Skipping audio processing after camera switch on iOS Chrome');
+                    processedStream = null;
+                } else {
+                    processedStream = initAudioProcessing();
+                }
                 
                 localVideo.srcObject = localStream;
                 
@@ -515,10 +526,39 @@
                     addDebugMessage('🎵 Got viewer audio stream');
                     updateStatus('🎵 Received audio stream from viewer!', 'connected');
                     
-                    // Play viewer's audio
+                    // Enhanced audio stream debugging
+                    console.log('🔊 [STREAMER] Audio stream details:', {
+                        id: stream.id,
+                        active: stream.active,
+                        audioTracks: stream.getAudioTracks().length,
+                        videoTracks: stream.getVideoTracks().length
+                    });
+                    
+                    // Play viewer's audio with enhanced setup
                     remoteAudio.srcObject = stream;
-                    console.log('🔊 [STREAMER] Set remote audio source');
+                    remoteAudio.volume = 1.0; // Ensure full volume
+                    remoteAudio.muted = false; // Ensure not muted
+                    console.log('🔊 [STREAMER] Set remote audio source with volume=1.0, muted=false');
                     updateStatus('🔊 Set remote audio source', 'info');
+                    
+                    // Force audio play with user interaction
+                    remoteAudio.play().then(() => {
+                        console.log('🔊 [STREAMER] ✅ Remote audio playback started successfully');
+                        updateStatus('🔊 ✅ Remote audio playing!', 'connected');
+                    }).catch(error => {
+                        console.error('🔊 [STREAMER] ❌ Remote audio playback failed:', error);
+                        updateStatus('🔊 ❌ Audio blocked: ' + error.message, 'error');
+                        
+                        // Add click handler to enable audio on user interaction
+                        document.addEventListener('click', () => {
+                            remoteAudio.play().then(() => {
+                                console.log('🔊 [STREAMER] ✅ Audio enabled after user click');
+                                updateStatus('🔊 ✅ Audio enabled after click!', 'connected');
+                            }).catch(err => {
+                                console.error('🔊 [STREAMER] ❌ Audio still failed after click:', err);
+                            });
+                        }, { once: true });
+                    });
                     
                     // iOS AirPods audio routing fix
                     if (isIOS) {
