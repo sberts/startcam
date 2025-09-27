@@ -1013,7 +1013,7 @@
         }
         
         // Force iOS audio routing with user interaction
-        function forceAudioRouting() {
+        async function forceAudioRouting() {
             updateStatus('🎧 User requested audio routing...', 'info');
             
             if (!remoteAudio.srcObject) {
@@ -1022,7 +1022,44 @@
             }
             
             try {
-                // Stop and restart audio with user interaction context
+                // Check for iOS audio output devices
+                if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+                    updateStatus('🎧 Checking available audio devices...', 'info');
+                    
+                    const devices = await navigator.mediaDevices.enumerateDevices();
+                    const audioOutputs = devices.filter(device => device.kind === 'audiooutput');
+                    
+                    updateStatus(`🎧 Found ${audioOutputs.length} audio output devices`, 'info');
+                    
+                    // Log available devices
+                    audioOutputs.forEach((device, index) => {
+                        console.log(`Audio device ${index}: ${device.label || 'Unknown'} (${device.deviceId})`);
+                        if (device.label.toLowerCase().includes('airpods') || 
+                            device.label.toLowerCase().includes('bluetooth')) {
+                            updateStatus(`🎧 Found Bluetooth device: ${device.label}`, 'connected');
+                        }
+                    });
+                    
+                    // Try to set audio output device if supported
+                    if (remoteAudio.setSinkId) {
+                        const bluetoothDevice = audioOutputs.find(device => 
+                            device.label.toLowerCase().includes('airpods') || 
+                            device.label.toLowerCase().includes('bluetooth')
+                        );
+                        
+                        if (bluetoothDevice) {
+                            updateStatus(`🎧 Attempting to route to: ${bluetoothDevice.label}`, 'info');
+                            await remoteAudio.setSinkId(bluetoothDevice.deviceId);
+                            updateStatus('🎧 Audio output device set successfully!', 'connected');
+                        } else {
+                            updateStatus('🎧 No AirPods/Bluetooth device found in list', 'error');
+                        }
+                    } else {
+                        updateStatus('🎧 setSinkId not supported - using fallback method', 'info');
+                    }
+                }
+                
+                // Fallback: Stop and restart audio with user interaction context
                 remoteAudio.pause();
                 updateStatus('🎧 Paused audio for re-routing', 'info');
                 
@@ -1039,9 +1076,19 @@
                     source.connect(audioContext.destination);
                     updateStatus('🎧 Re-established Web Audio routing', 'connected');
                     
+                    // Add iOS-specific audio session configuration
+                    if ('mediaSession' in navigator) {
+                        navigator.mediaSession.metadata = new MediaMetadata({
+                            title: 'StartCam Audio Stream',
+                            artist: 'StartCam',
+                            album: 'WebRTC Stream'
+                        });
+                        updateStatus('🎧 Set iOS media session metadata', 'info');
+                    }
+                    
                     // Restart playback
                     remoteAudio.play().then(() => {
-                        updateStatus('🎧 Audio restarted - should route to AirPods now', 'connected');
+                        updateStatus('🎧 Audio restarted - check AirPods now', 'connected');
                     }).catch(err => {
                         updateStatus('🎧 Failed to restart audio: ' + err.message, 'error');
                     });
