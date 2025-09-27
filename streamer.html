@@ -122,6 +122,7 @@
             <span id="volumeValue">100%</span>
         </div>
         <button id="remoteAudioBtn" onclick="toggleRemoteAudio()" disabled style="display: none;">🔇 Remote Mute</button>
+        <button id="forceAudioRoutingBtn" onclick="forceAudioRouting()" disabled style="display: none; background: #28a745;">🎧 Route to AirPods</button>
         <button id="connectBtn" onclick="connectToPeer()" disabled>Connect to Viewer</button>
     </div>
 
@@ -149,6 +150,7 @@
         const volumeValue = document.getElementById('volumeValue');
         const remoteAudio = document.getElementById('remoteAudio');
         const remoteAudioBtn = document.getElementById('remoteAudioBtn');
+        const forceAudioRoutingBtn = document.getElementById('forceAudioRoutingBtn');
         
         function updateStatus(message, type = 'info') {
             status.textContent = message;
@@ -515,14 +517,17 @@
                     // iOS AirPods audio routing fix
                     if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
                         console.log('🎧 [STREAMER] iOS detected - applying AirPods audio routing fixes');
+                        updateStatus('🎧 iOS detected - applying AirPods fixes', 'info');
                         
                         // Set audio element properties for iOS AirPods routing
                         remoteAudio.setAttribute('playsinline', true);
                         remoteAudio.setAttribute('webkit-playsinline', true);
+                        updateStatus('🎧 Audio element attributes set for iOS', 'info');
                         
                         // Force audio to route through default output (AirPods if connected)
                         remoteAudio.addEventListener('loadedmetadata', () => {
                             console.log('🎧 [STREAMER] Audio metadata loaded, attempting iOS audio routing');
+                            updateStatus('🎧 Audio metadata loaded - setting up routing', 'info');
                             
                             // Create Web Audio API context to force proper routing
                             try {
@@ -530,24 +535,52 @@
                                 const source = audioContext.createMediaElementSource(remoteAudio);
                                 source.connect(audioContext.destination);
                                 console.log('🎧 [STREAMER] Web Audio API routing established for iOS');
+                                updateStatus('🎧 Web Audio API routing established', 'connected');
                                 
                                 // Resume audio context if suspended
                                 if (audioContext.state === 'suspended') {
+                                    updateStatus('🎧 AudioContext suspended - resuming...', 'info');
                                     audioContext.resume().then(() => {
                                         console.log('🎧 [STREAMER] iOS AudioContext resumed');
+                                        updateStatus('🎧 AudioContext resumed successfully', 'connected');
+                                    }).catch(resumeError => {
+                                        updateStatus('🎧 AudioContext resume failed: ' + resumeError.message, 'error');
                                     });
+                                } else {
+                                    updateStatus('🎧 AudioContext state: ' + audioContext.state, 'info');
                                 }
                             } catch (webAudioError) {
                                 console.warn('🎧 [STREAMER] Web Audio API setup failed:', webAudioError);
+                                updateStatus('🎧 Web Audio API failed: ' + webAudioError.message, 'error');
                             }
                             
                             // Try to play immediately to establish audio context
                             remoteAudio.play().then(() => {
                                 console.log('🎧 [STREAMER] iOS audio started successfully');
+                                updateStatus('🎧 iOS audio started - should route to AirPods', 'connected');
                             }).catch(err => {
                                 console.warn('🎧 [STREAMER] iOS audio autoplay failed:', err);
+                                updateStatus('🎧 iOS audio autoplay failed: ' + err.message, 'error');
                             });
                         });
+                        
+                        // Add additional iOS audio debugging
+                        remoteAudio.addEventListener('play', () => {
+                            updateStatus('🎧 Audio PLAY event fired', 'connected');
+                        });
+                        
+                        remoteAudio.addEventListener('playing', () => {
+                            updateStatus('🎧 Audio PLAYING event fired', 'connected');
+                        });
+                        
+                        remoteAudio.addEventListener('error', (err) => {
+                            updateStatus('🎧 Audio ERROR: ' + err.message, 'error');
+                        });
+                        
+                        // Show iOS audio routing button
+                        forceAudioRoutingBtn.style.display = 'inline-block';
+                        forceAudioRoutingBtn.disabled = false;
+                        updateStatus('🎧 iOS AirPods routing button available', 'info');
                     }
                     
                     // Show remote audio control if audio tracks exist
@@ -966,6 +999,48 @@
             remoteAudioBtn.style.backgroundColor = remoteAudio.muted ? '#dc3545' : '#007bff';
             
             console.log(`🔊 [STREAMER] Remote audio ${remoteAudio.muted ? 'muted' : 'unmuted'}`);
+        }
+        
+        // Force iOS audio routing with user interaction
+        function forceAudioRouting() {
+            updateStatus('🎧 User requested audio routing...', 'info');
+            
+            if (!remoteAudio.srcObject) {
+                updateStatus('🎧 No audio stream available for routing', 'error');
+                return;
+            }
+            
+            try {
+                // Stop and restart audio with user interaction context
+                remoteAudio.pause();
+                updateStatus('🎧 Paused audio for re-routing', 'info');
+                
+                // Create new AudioContext with user interaction
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                updateStatus('🎧 Created new AudioContext: ' + audioContext.state, 'info');
+                
+                // Force resume AudioContext
+                audioContext.resume().then(() => {
+                    updateStatus('🎧 AudioContext resumed with user interaction', 'connected');
+                    
+                    // Create new routing with user gesture
+                    const source = audioContext.createMediaElementSource(remoteAudio);
+                    source.connect(audioContext.destination);
+                    updateStatus('🎧 Re-established Web Audio routing', 'connected');
+                    
+                    // Restart playback
+                    remoteAudio.play().then(() => {
+                        updateStatus('🎧 Audio restarted - should route to AirPods now', 'connected');
+                    }).catch(err => {
+                        updateStatus('🎧 Failed to restart audio: ' + err.message, 'error');
+                    });
+                }).catch(err => {
+                    updateStatus('🎧 AudioContext resume failed: ' + err.message, 'error');
+                });
+                
+            } catch (error) {
+                updateStatus('🎧 Force routing failed: ' + error.message, 'error');
+            }
         }
         
         // Initialize camera detection on page load
