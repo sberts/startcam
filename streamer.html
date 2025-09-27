@@ -509,15 +509,22 @@
                 peer.on('stream', (stream) => {
                     console.log('🎵 [STREAMER] Received audio stream from viewer!', stream);
                     addDebugMessage('🎵 Got viewer audio stream');
+                    updateStatus('🎵 Received audio stream from viewer!', 'connected');
                     
                     // Play viewer's audio
                     remoteAudio.srcObject = stream;
                     console.log('🔊 [STREAMER] Set remote audio source');
+                    updateStatus('🔊 Set remote audio source', 'info');
                     
                     // iOS AirPods audio routing fix
                     if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
                         console.log('🎧 [STREAMER] iOS detected - applying AirPods audio routing fixes');
                         updateStatus('🎧 iOS detected - applying AirPods fixes', 'info');
+                        
+                        // Keep iOS detection message visible for 3 seconds
+                        setTimeout(() => {
+                            updateStatus('🎧 iOS AirPods setup in progress...', 'info');
+                        }, 1000);
                         
                         // Set audio element properties for iOS AirPods routing
                         remoteAudio.setAttribute('playsinline', true);
@@ -1050,6 +1057,13 @@
         // Initialize camera detection on page load
         window.addEventListener('load', () => {
             detectCameras();
+            
+            // Show device detection immediately
+            if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+                updateStatus('📱 iOS device detected - AirPods support enabled', 'info');
+            } else {
+                updateStatus('💻 Non-iOS device detected - standard audio', 'info');
+            }
         });
         
         window.addEventListener('beforeunload', () => {
