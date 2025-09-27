@@ -114,8 +114,10 @@
     
     <div>
         <button id="startBtn" onclick="startStream()">Start Camera</button>
+        <button id="stopCameraBtn" onclick="stopCamera()" disabled style="background: #dc3545;">📷 Stop Camera</button>
         <button id="switchCameraBtn" onclick="switchCamera()" disabled style="display: none;">Switch Camera</button>
         <button id="muteBtn" onclick="toggleMute()" disabled>🎤 Mute</button>
+        <button id="stopWebRTCBtn" onclick="stopWebRTC()" disabled style="background: #dc3545;">🔌 Stop WebRTC</button>
         <div class="volume-control" id="volumeControl" style="display: none;">
             <span>🔊</span>
             <input type="range" id="volumeSlider" class="volume-slider" min="0" max="200" value="100" oninput="adjustVolume(this.value)">
@@ -134,7 +136,7 @@
         let gainNode = null;
         let peer = null;
         let ws = null;
-        let currentCamera = 'user'; // 'user' for front, 'environment' for rear
+        let currentCamera = 'environment'; // 'user' for front, 'environment' for rear (default to back camera)
         let availableCameras = [];
         let isMuted = false;
         let currentVolume = 100; // 0-200%
@@ -149,6 +151,8 @@
         const switchCameraBtn = document.getElementById('switchCameraBtn');
         const muteBtn = document.getElementById('muteBtn');
         const connectBtn = document.getElementById('connectBtn');
+        const stopCameraBtn = document.getElementById('stopCameraBtn');
+        const stopWebRTCBtn = document.getElementById('stopWebRTCBtn');
         const volumeControl = document.getElementById('volumeControl');
         const volumeSlider = document.getElementById('volumeSlider');
         const volumeValue = document.getElementById('volumeValue');
@@ -280,6 +284,7 @@
                 };
                 
                 startBtn.disabled = true;
+                stopCameraBtn.disabled = false;
                 switchCameraBtn.disabled = false;
                 muteBtn.disabled = false;
                 connectBtn.disabled = false;
@@ -360,6 +365,9 @@
                             console.log('🎵 [STREAMER] Replaced audio track in peer connection');
                         }
                     }
+                    
+                    // Update stop WebRTC button state
+                    stopWebRTCBtn.disabled = false;
                 }
                 
                 updateStatus('Camera switched - Ready to connect', 'connected');
@@ -369,6 +377,115 @@
                 
                 // Try to restore previous camera
                 currentCamera = currentCamera === 'user' ? 'environment' : 'user';
+            }
+        }
+        
+        // Stop camera stream
+        function stopCamera() {
+            try {
+                updateStatus('Stopping camera...', 'info');
+                
+                // Stop all tracks in local stream
+                if (localStream) {
+                    localStream.getTracks().forEach(track => {
+                        track.stop();
+                        console.log(`📹 [STREAMER] Stopped ${track.kind} track`);
+                    });
+                    localStream = null;
+                }
+                
+                // Stop processed stream
+                if (processedStream) {
+                    processedStream.getTracks().forEach(track => {
+                        track.stop();
+                    });
+                    processedStream = null;
+                }
+                
+                // Close audio context
+                if (audioContext && audioContext.state !== 'closed') {
+                    audioContext.close();
+                    audioContext = null;
+                    gainNode = null;
+                }
+                
+                // Clear video display
+                localVideo.srcObject = null;
+                
+                // Update button states
+                startBtn.disabled = false;
+                stopCameraBtn.disabled = true;
+                switchCameraBtn.disabled = true;
+                muteBtn.disabled = true;
+                muteBtn.textContent = '🎤 Mute';
+                muteBtn.style.backgroundColor = '#007bff';
+                connectBtn.disabled = true;
+                
+                // Hide volume control
+                volumeControl.style.display = 'none';
+                
+                // Reset mute state
+                isMuted = false;
+                
+                updateStatus('Camera stopped', 'info');
+                console.log('📹 [STREAMER] Camera stopped successfully');
+                
+            } catch (error) {
+                console.error('❌ [STREAMER] Error stopping camera:', error);
+                updateStatus('Error stopping camera: ' + error.message, 'error');
+            }
+        }
+        
+        // Stop WebRTC connection
+        function stopWebRTC() {
+            try {
+                updateStatus('Stopping WebRTC connection...', 'info');
+                
+                // Destroy peer connection
+                if (peer && !peer.destroyed) {
+                    peer.destroy();
+                    peer = null;
+                    console.log('🔌 [STREAMER] Peer connection destroyed');
+                }
+                
+                // Close WebSocket
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.close();
+                    ws = null;
+                    console.log('🔌 [STREAMER] WebSocket closed');
+                }
+                
+                // Close global audio context
+                if (globalAudioContext && globalAudioContext.state !== 'closed') {
+                    globalAudioContext.close();
+                    globalAudioContext = null;
+                    globalAudioSource = null;
+                }
+                
+                // Clear remote audio
+                remoteAudio.srcObject = null;
+                remoteAudio.pause();
+                
+                // Update button states
+                connectBtn.disabled = localStream ? false : true; // Enable if camera is still running
+                stopWebRTCBtn.disabled = true;
+                
+                // Hide remote controls
+                remoteAudioBtn.style.display = 'none';
+                remoteAudioBtn.disabled = true;
+                forceAudioRoutingBtn.style.display = 'none';
+                forceAudioRoutingBtn.disabled = true;
+                
+                // Reset remote audio button
+                remoteAudioBtn.textContent = '🔇 Remote Mute';
+                remoteAudioBtn.style.backgroundColor = '#007bff';
+                
+                updateStatus('WebRTC connection stopped', 'info');
+                console.log('🔌 [STREAMER] WebRTC connection stopped successfully');
+                
+            } catch (error) {
+                console.error('❌ [STREAMER] Error stopping WebRTC:', error);
+                updateStatus('Error stopping WebRTC: ' + error.message, 'error');
             }
         }
         
@@ -707,6 +824,7 @@
                     console.log('🤝 [STREAMER] Peer data channel connected!');
                     updateStatus('✅ Connected to viewer!', 'connected');
                     connectBtn.disabled = true;
+                    stopWebRTCBtn.disabled = false;
                     
                     // Comprehensive WebRTC sender verification
                     const activeStream = processedStream || localStream;
