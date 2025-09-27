@@ -140,6 +140,8 @@
         let currentVolume = 100; // 0-200%
         let globalAudioContext = null;
         let globalAudioSource = null;
+        const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+        const isIOSChrome = isIOS && /CriOS/i.test(navigator.userAgent);
         
         const localVideo = document.getElementById('localVideo');
         const status = document.getElementById('status');
@@ -519,7 +521,7 @@
                     updateStatus('🔊 Set remote audio source', 'info');
                     
                     // iOS AirPods audio routing fix
-                    if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+                    if (isIOS) {
                         console.log('🎧 [STREAMER] iOS detected - applying AirPods audio routing fixes');
                         updateStatus('🎧 iOS detected - applying AirPods fixes', 'info');
                         
@@ -538,37 +540,41 @@
                             console.log('🎧 [STREAMER] Audio metadata loaded, attempting iOS audio routing');
                             updateStatus('🎧 Audio metadata loaded - setting up routing', 'info');
                             
-                            // Create Web Audio API context to force proper routing
-                            try {
-                                if (!globalAudioContext) {
-                                    globalAudioContext = new (window.AudioContext || window.webkitAudioContext)();
-                                    console.log('🎧 [STREAMER] Created global AudioContext for iOS');
+                            if (isIOSChrome) {
+                                updateStatus('🎧 Skipping Web Audio reroute on iOS Chrome to preserve Bluetooth output', 'info');
+                            } else {
+                                // Create Web Audio API context to force proper routing (helps Safari)
+                                try {
+                                    if (!globalAudioContext) {
+                                        globalAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+                                        console.log('🎧 [STREAMER] Created global AudioContext for iOS');
+                                    }
+                                    
+                                    if (!globalAudioSource) {
+                                        globalAudioSource = globalAudioContext.createMediaElementSource(remoteAudio);
+                                        globalAudioSource.connect(globalAudioContext.destination);
+                                        console.log('🎧 [STREAMER] Created MediaElementSource for iOS');
+                                    }
+                                    
+                                    console.log('🎧 [STREAMER] Web Audio API routing established for iOS');
+                                    updateStatus('🎧 Web Audio API routing established', 'connected');
+                                    
+                                    // Resume audio context if suspended
+                                    if (globalAudioContext.state === 'suspended') {
+                                        updateStatus('🎧 AudioContext suspended - resuming...', 'info');
+                                        globalAudioContext.resume().then(() => {
+                                            console.log('🎧 [STREAMER] iOS AudioContext resumed');
+                                            updateStatus('🎧 AudioContext resumed successfully', 'connected');
+                                        }).catch(resumeError => {
+                                            updateStatus('🎧 AudioContext resume failed: ' + resumeError.message, 'error');
+                                        });
+                                    } else {
+                                        updateStatus('🎧 AudioContext state: ' + globalAudioContext.state, 'info');
+                                    }
+                                } catch (webAudioError) {
+                                    console.warn('🎧 [STREAMER] Web Audio API setup failed:', webAudioError);
+                                    updateStatus('🎧 Web Audio API failed: ' + webAudioError.message, 'error');
                                 }
-                                
-                                if (!globalAudioSource) {
-                                    globalAudioSource = globalAudioContext.createMediaElementSource(remoteAudio);
-                                    globalAudioSource.connect(globalAudioContext.destination);
-                                    console.log('🎧 [STREAMER] Created MediaElementSource for iOS');
-                                }
-                                
-                                console.log('🎧 [STREAMER] Web Audio API routing established for iOS');
-                                updateStatus('🎧 Web Audio API routing established', 'connected');
-                                
-                                // Resume audio context if suspended
-                                if (globalAudioContext.state === 'suspended') {
-                                    updateStatus('🎧 AudioContext suspended - resuming...', 'info');
-                                    globalAudioContext.resume().then(() => {
-                                        console.log('🎧 [STREAMER] iOS AudioContext resumed');
-                                        updateStatus('🎧 AudioContext resumed successfully', 'connected');
-                                    }).catch(resumeError => {
-                                        updateStatus('🎧 AudioContext resume failed: ' + resumeError.message, 'error');
-                                    });
-                                } else {
-                                    updateStatus('🎧 AudioContext state: ' + globalAudioContext.state, 'info');
-                                }
-                            } catch (webAudioError) {
-                                console.warn('🎧 [STREAMER] Web Audio API setup failed:', webAudioError);
-                                updateStatus('🎧 Web Audio API failed: ' + webAudioError.message, 'error');
                             }
                             
                             // Try to play immediately to establish audio context
@@ -1072,7 +1078,17 @@
                 // Fallback: Stop and restart audio with user interaction context
                 remoteAudio.pause();
                 updateStatus('🎧 Paused audio for re-routing', 'info');
-                
+
+                if (isIOSChrome) {
+                    updateStatus('🎧 Skipping Web Audio reroute on iOS Chrome - rely on native Bluetooth routing', 'info');
+                    remoteAudio.play().then(() => {
+                        updateStatus('🎧 Audio playing - verify AirPods output', 'connected');
+                    }).catch(err => {
+                        updateStatus('🎧 Failed to restart audio: ' + err.message, 'error');
+                    });
+                    return;
+                }
+
                 // Reuse or create AudioContext with user interaction
                 if (!globalAudioContext) {
                     globalAudioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -1080,7 +1096,7 @@
                 } else {
                     updateStatus('🎧 Reusing existing AudioContext: ' + globalAudioContext.state, 'info');
                 }
-                
+
                 // Force resume AudioContext
                 globalAudioContext.resume().then(() => {
                     updateStatus('🎧 AudioContext resumed with user interaction', 'connected');
@@ -1124,7 +1140,7 @@
             detectCameras();
             
             // Show device detection immediately
-            if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+            if (isIOS) {
                 updateStatus('📱 iOS device detected - AirPods support enabled', 'info');
             } else {
                 updateStatus('💻 Non-iOS device detected - standard audio', 'info');
