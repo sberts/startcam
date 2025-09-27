@@ -110,7 +110,7 @@
     <div id="status" class="status info">Ready to start streaming</div>
     
     <video id="localVideo" autoplay muted playsinline></video>
-    <audio id="remoteAudio" autoplay></audio>
+    <audio id="remoteAudio" autoplay playsinline webkit-playsinline></audio>
     
     <div>
         <button id="startBtn" onclick="startStream()">Start Camera</button>
@@ -512,6 +512,44 @@
                     remoteAudio.srcObject = stream;
                     console.log('🔊 [STREAMER] Set remote audio source');
                     
+                    // iOS AirPods audio routing fix
+                    if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+                        console.log('🎧 [STREAMER] iOS detected - applying AirPods audio routing fixes');
+                        
+                        // Set audio element properties for iOS AirPods routing
+                        remoteAudio.setAttribute('playsinline', true);
+                        remoteAudio.setAttribute('webkit-playsinline', true);
+                        
+                        // Force audio to route through default output (AirPods if connected)
+                        remoteAudio.addEventListener('loadedmetadata', () => {
+                            console.log('🎧 [STREAMER] Audio metadata loaded, attempting iOS audio routing');
+                            
+                            // Create Web Audio API context to force proper routing
+                            try {
+                                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                                const source = audioContext.createMediaElementSource(remoteAudio);
+                                source.connect(audioContext.destination);
+                                console.log('🎧 [STREAMER] Web Audio API routing established for iOS');
+                                
+                                // Resume audio context if suspended
+                                if (audioContext.state === 'suspended') {
+                                    audioContext.resume().then(() => {
+                                        console.log('🎧 [STREAMER] iOS AudioContext resumed');
+                                    });
+                                }
+                            } catch (webAudioError) {
+                                console.warn('🎧 [STREAMER] Web Audio API setup failed:', webAudioError);
+                            }
+                            
+                            // Try to play immediately to establish audio context
+                            remoteAudio.play().then(() => {
+                                console.log('🎧 [STREAMER] iOS audio started successfully');
+                            }).catch(err => {
+                                console.warn('🎧 [STREAMER] iOS audio autoplay failed:', err);
+                            });
+                        });
+                    }
+                    
                     // Show remote audio control if audio tracks exist
                     if (stream.getAudioTracks().length > 0) {
                         remoteAudioBtn.style.display = 'inline-block';
@@ -799,6 +837,18 @@
                         if (message.data.type === 'answer') {
                             addDebugMessage('📋 Got answer from viewer');
                             console.log(`📋 [STREAMER] Got answer! SDP length:`, message.data.sdp?.length);
+                            updateStatus('📋 Processing answer from viewer', 'info');
+                        } else if (message.data.type === 'offer') {
+                            // This is a renegotiation offer from the viewer
+                            addDebugMessage('🔄 Got renegotiation offer');
+                            console.log(`🔄 [STREAMER] Received renegotiation offer! SDP length:`, message.data.sdp?.length);
+                            updateStatus('🔄 Processing renegotiation from viewer', 'info');
+                            
+                            // Check if this offer includes audio tracks that weren't there before
+                            if (message.data.sdp && message.data.sdp.includes('m=audio')) {
+                                console.log(`🎵 [STREAMER] Renegotiation includes audio tracks!`);
+                                updateStatus('🎵 Viewer is adding audio stream', 'connected');
+                            }
                         } else if (message.data.candidate) {
                             // Extract IP from candidate string
                             const candidateString = message.data.candidate.candidate || message.data.candidate;
