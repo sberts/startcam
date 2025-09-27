@@ -138,6 +138,8 @@
         let availableCameras = [];
         let isMuted = false;
         let currentVolume = 100; // 0-200%
+        let globalAudioContext = null;
+        let globalAudioSource = null;
         
         const localVideo = document.getElementById('localVideo');
         const status = document.getElementById('status');
@@ -538,23 +540,31 @@
                             
                             // Create Web Audio API context to force proper routing
                             try {
-                                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                                const source = audioContext.createMediaElementSource(remoteAudio);
-                                source.connect(audioContext.destination);
+                                if (!globalAudioContext) {
+                                    globalAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+                                    console.log('🎧 [STREAMER] Created global AudioContext for iOS');
+                                }
+                                
+                                if (!globalAudioSource) {
+                                    globalAudioSource = globalAudioContext.createMediaElementSource(remoteAudio);
+                                    globalAudioSource.connect(globalAudioContext.destination);
+                                    console.log('🎧 [STREAMER] Created MediaElementSource for iOS');
+                                }
+                                
                                 console.log('🎧 [STREAMER] Web Audio API routing established for iOS');
                                 updateStatus('🎧 Web Audio API routing established', 'connected');
                                 
                                 // Resume audio context if suspended
-                                if (audioContext.state === 'suspended') {
+                                if (globalAudioContext.state === 'suspended') {
                                     updateStatus('🎧 AudioContext suspended - resuming...', 'info');
-                                    audioContext.resume().then(() => {
+                                    globalAudioContext.resume().then(() => {
                                         console.log('🎧 [STREAMER] iOS AudioContext resumed');
                                         updateStatus('🎧 AudioContext resumed successfully', 'connected');
                                     }).catch(resumeError => {
                                         updateStatus('🎧 AudioContext resume failed: ' + resumeError.message, 'error');
                                     });
                                 } else {
-                                    updateStatus('🎧 AudioContext state: ' + audioContext.state, 'info');
+                                    updateStatus('🎧 AudioContext state: ' + globalAudioContext.state, 'info');
                                 }
                             } catch (webAudioError) {
                                 console.warn('🎧 [STREAMER] Web Audio API setup failed:', webAudioError);
@@ -1063,18 +1073,26 @@
                 remoteAudio.pause();
                 updateStatus('🎧 Paused audio for re-routing', 'info');
                 
-                // Create new AudioContext with user interaction
-                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                updateStatus('🎧 Created new AudioContext: ' + audioContext.state, 'info');
+                // Reuse or create AudioContext with user interaction
+                if (!globalAudioContext) {
+                    globalAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    updateStatus('🎧 Created new AudioContext: ' + globalAudioContext.state, 'info');
+                } else {
+                    updateStatus('🎧 Reusing existing AudioContext: ' + globalAudioContext.state, 'info');
+                }
                 
                 // Force resume AudioContext
-                audioContext.resume().then(() => {
+                globalAudioContext.resume().then(() => {
                     updateStatus('🎧 AudioContext resumed with user interaction', 'connected');
                     
-                    // Create new routing with user gesture
-                    const source = audioContext.createMediaElementSource(remoteAudio);
-                    source.connect(audioContext.destination);
-                    updateStatus('🎧 Re-established Web Audio routing', 'connected');
+                    // Create routing with user gesture (only if not already created)
+                    if (!globalAudioSource) {
+                        globalAudioSource = globalAudioContext.createMediaElementSource(remoteAudio);
+                        globalAudioSource.connect(globalAudioContext.destination);
+                        updateStatus('🎧 Created Web Audio routing', 'connected');
+                    } else {
+                        updateStatus('🎧 Web Audio routing already exists', 'connected');
+                    }
                     
                     // Add iOS-specific audio session configuration
                     if ('mediaSession' in navigator) {
