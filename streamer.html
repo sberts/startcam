@@ -581,6 +581,10 @@
                         forceAudioRoutingBtn.style.display = 'inline-block';
                         forceAudioRoutingBtn.disabled = false;
                         updateStatus('🎧 iOS AirPods routing button available', 'info');
+                    } else {
+                        // Not iOS - log this for debugging
+                        console.log('🎧 [STREAMER] Non-iOS device detected - standard audio routing');
+                        updateStatus('🎧 Non-iOS device - standard audio routing', 'info');
                     }
                     
                     // Show remote audio control if audio tracks exist
