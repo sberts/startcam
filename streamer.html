@@ -828,6 +828,43 @@
                     console.log(`🔌 [STREAMER] Connection state: ${peer._pc.connectionState}`);
                 };
                 
+                // Listen for track changes (important for audio track replacement)
+                peer._pc.ontrack = (event) => {
+                    console.log('🎵 [STREAMER] Track event received:', {
+                        kind: event.track.kind,
+                        readyState: event.track.readyState,
+                        enabled: event.track.enabled,
+                        label: event.track.label,
+                        streams: event.streams.length
+                    });
+                    
+                    if (event.track.kind === 'audio') {
+                        console.log('🔊 [STREAMER] Audio track detected in ontrack event!');
+                        
+                        // Handle the audio track directly
+                        if (event.streams && event.streams.length > 0) {
+                            const stream = event.streams[0];
+                            console.log('🔊 [STREAMER] Setting audio stream from ontrack event');
+                            
+                            // Set up the audio element with the stream
+                            remoteAudio.srcObject = stream;
+                            remoteAudio.volume = 1.0;
+                            remoteAudio.muted = false;
+                            
+                            updateStatus('🔊 Audio track received via ontrack!', 'connected');
+                            
+                            // Try to play
+                            remoteAudio.play().then(() => {
+                                console.log('🔊 [STREAMER] ✅ Audio playing from track event!');
+                                updateStatus('🔊 ✅ Audio playing from track!', 'connected');
+                            }).catch(error => {
+                                console.error('🔊 [STREAMER] ❌ Audio play failed from track:', error);
+                                updateStatus('🔊 ❌ Click to enable audio', 'error');
+                            });
+                        }
+                    }
+                };
+                
                 let vpnCandidateSent = false;
                 
                 peer._pc.onicecandidate = (event) => {
