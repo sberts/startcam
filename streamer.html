@@ -886,6 +886,11 @@
                     if (peer._pc.iceConnectionState === 'connected' || peer._pc.iceConnectionState === 'completed') {
                         console.log('✅ [STREAMER] ICE connected! Checking senders...');
                         
+                        // Enable Stop WebRTC button when ICE connection is established
+                        connectBtn.disabled = true;
+                        stopWebRTCBtn.disabled = false;
+                        console.log('🔘 [STREAMER] Stop WebRTC button enabled via ICE connection');
+                        
                         // Verify senders immediately when ICE connects
                         const senders = peer._pc.getSenders();
                         console.log('📤 [STREAMER] WebRTC senders at ICE connect:', senders.length);
